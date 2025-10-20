@@ -1,0 +1,2 @@
+class Overlay < ApplicationRecord
+end

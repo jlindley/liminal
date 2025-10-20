@@ -1,0 +1,13 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  overlay_id: MyString
+  name: MyString
+  overlay_type: MyString
+  mutually_exclusive_with: 
+
+two:
+  overlay_id: MyString
+  name: MyString
+  overlay_type: MyString
+  mutually_exclusive_with: 
