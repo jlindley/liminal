@@ -84,6 +84,81 @@ liminal/
 - Stable across file renames
 - Solo authoring only (not safe for concurrent ID generation)
 
+**File Format Examples:**
+
+```toml
+# entities/npcs/npc-bran.toml
+
+entity_id = "npc-bran"
+entity_type = "npc"
+name = "Bran"
+
+[core_data]
+name = "Bran"
+race = "Human"
+role = "Bartender"
+description = "A weathered bartender with kind eyes"
+
+[core_data.stats]
+ac = 10
+hp = 8
+
+[[conditional_fragments]]
+required_overlays = ["recently-bubbled"]
+[conditional_fragments.data]
+personality = "Skeptical of outsiders"
+items = ["magical-mace"]
+
+[[conditional_fragments]]
+required_overlays = ["elemental-maelstorm"]
+[conditional_fragments.data]
+description = "A weathered bartender with kind eyes and a burn scar on his left cheek"
+quest_hooks = ["recover-roof-materials"]
+
+[visibility_rules]
+name = "public_when_discovered"
+description = "public_when_discovered"
+personality = "dm_controlled"
+stats = "dm_only"
+quest_hooks = "dm_only"
+```
+
+**For complete entity replacements:**
+
+```toml
+# entities/npcs/npc-elena.toml
+entity_id = "npc-elena"
+entity_type = "npc"
+name = "Elena"
+replaces = "npc-bran"  # Special field
+show_when = ["100-years-bubbled"]
+
+[core_data]
+name = "Elena"
+race = "Human"
+role = "Bartender"
+description = "Bran's granddaughter, young and energetic"
+# ... full entity data
+```
+
+**Overlay definitions:**
+
+```toml
+# overlays/overlays.toml
+
+[[overlay]]
+overlay_id = "recently-bubbled"
+name = "Recently Bubbled"
+overlay_type = "major"
+mutually_exclusive_with = ["100-years-bubbled"]
+
+[[overlay]]
+overlay_id = "elemental-maelstorm"
+name = "Elemental Maelstorm"
+overlay_type = "flavor"
+mutually_exclusive_with = []
+```
+
 ### Path 2: DM Customization (Web UI)
 
 DMs use structured editor:
@@ -160,12 +235,30 @@ mutually_exclusive_with = ["recently-bubbled"]
 
 **Note on combinatorial explosion:** With 3 major and 6 flavor overlays, naive exhaustive testing = ~192 combinations. Validation strategy: test each overlay individually, test mutual exclusivity enforcement, sample common/recommended combinations, flag high-complexity entities.
 
-### Resolution Rules (Determined by Spike)
+### Resolution Rules (Compositional Layers Approach)
 
-- Entity replacement beats modification
-- DM customization beats everything
-- Merge multiple modifications when compatible
-- Clear precedence order (to be validated by spike)
+**Resolution flow:**
+1. Start with base entity's `core_data` (always present fields)
+2. Merge matching `conditional_fragments` (where ALL `required_overlays` are active in campaign)
+3. Apply DM overrides (disable, edit, or replace)
+4. Filter by field visibility rules based on viewer role
+
+**Merge semantics:**
+- Multiple matching fragments merge additively in array order
+- Later fragments override earlier ones for the same keys (Hash merge behavior)
+- DM overrides always win (deep merge over resolved base + fragments)
+
+**Replacement behavior:**
+- Entity replacement via `replaces` field + `show_when` conditions
+- When replacement is active, original entity and its fragments are hidden
+- Replacement entity is treated as entirely separate (doesn't inherit fragments)
+
+**Precedence hierarchy:**
+1. DM disable override → entity returns nil
+2. DM replace override → use replacement data entirely
+3. DM edit override → deep merge over resolved base
+4. Conditional fragments → merge where overlays match
+5. Base core_data → foundation layer
 
 ## User Workflows
 
@@ -246,18 +339,61 @@ mutually_exclusive_with = ["recently-bubbled"]
 - Multiple play kits
 - Multi-system support (Pathfinder, Dungeon World)
 
-## Open Questions (Spike Will Answer)
+## Data Model Details
 
-1. **Data model for overlay resolution** - Which approach balances flexibility, maintainability, and performance?
-2. **File format for conditional content** - How do we represent "if overlay X then content Y" in markdown/TOML?
-3. **Query patterns** - What's the actual performance of "resolve entity for campaign"?
-4. **Validation feasibility** - Can we realistically validate overlay combinations with sampling strategy?
+### Schema
+
+**campaigns**
+- `name`, `play_kit_id`
+- `active_overlays` (jsonb array) - e.g. `['recently-bubbled', 'elemental-maelstorm']`
+- Validates mutual exclusivity on save
+
+**overlays**
+- `overlay_id` (human-readable, e.g. 'recently-bubbled')
+- `name`, `overlay_type` ('major' or 'flavor')
+- `mutually_exclusive_with` (jsonb array)
+
+**base_entities**
+- `entity_id` (human-readable, e.g. 'npc-bran')
+- `entity_type` (npc, location, quest, item, adventure)
+- `name`
+- `core_data` (jsonb) - always-present fields
+- `conditional_fragments` (jsonb) - array of `{required_overlays: [...], data: {...}}`
+- `visibility_rules` (jsonb) - maps field names to visibility levels
+
+**dm_overrides**
+- `campaign_id`, `base_entity_id`
+- `override_type` ('disable', 'edit', 'replace')
+- `override_data` (jsonb) - custom data or full replacement
+
+### Query Performance
+
+**Pattern:**
+- One query for base entity
+- One query for DM overrides (can be eager loaded)
+- In-memory JSON manipulation for fragment merging and visibility filtering
+
+**Scalability:**
+- Personal use + alpha testers: no performance concerns
+- Caching layer recommended for production with many concurrent DMs
+- Cannot efficiently query across resolved data (e.g. "find all NPCs with burn scars")
+  - This is an acceptable limitation for the use case
+  - If needed later: materialized views or search index
 
 ## Future Considerations
 
-- Multiple game systems (5e → Pathfinder → Dungeon World) - stat blocks would need abstraction
+**Multiple game systems:**
+- Stat blocks stored as arbitrary JSON in `core_data` - no schema enforcement
+- Each entity can specify `system` field (e.g. "dnd5e", "pathfinder", "dungeon_world")
+- Maximum flexibility, but no type safety or DB-level validation
+- UI layer responsible for rendering different stat block formats
+- Future: could add `stat_block_schema_id` for validation if needed
+
+**Other future features:**
 - Export pipelines (PDF, Roll20 formats)
 - Additional play kits beyond "bubble"
 - Player features (notes, bookmarks)
 - Character sheet management
 - Real-time updates (ActionCable for instant reveals)
+- Entity relationships with referential integrity (currently just entity_id strings in data)
+- Querying resolved data (requires materialized views or search index)

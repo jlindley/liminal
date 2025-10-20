@@ -23,4 +23,15 @@ D&D campaign setting platform with dynamic overlay system. Building both the app
 
 Rails 8, PostgreSQL, Hotwire/Turbo, Tailwind, Kamal to VPS.
 
+## Development Principles
+
+**Logging for Complex Data Interactions:**
+- This project has multi-layer data resolution (base → fragments → replacements → overrides → visibility filtering)
+- Debug logging is a fundamental requirement, not an afterthought
+- Log every decision point in the resolution path
+- Make logs developer-friendly: explain WHY something happened, not just WHAT
+- Use `Rails.logger.debug` for detailed resolution tracing (disabled in production)
+- When data transforms, log before and after states
+- Think: "If this breaks at 2am, will the logs tell me why?"
+
 See DESIGN.md for full details.
