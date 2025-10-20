@@ -5,23 +5,30 @@
 Determine the best data modeling approach for a D&D campaign setting system that supports:
 - Base content shared across all DM instances (read-only)
 - Per-campaign overlay activation (mix-and-match from major and flavor overlays)
+- Mutual exclusivity rules for overlays (some overlays cannot both be active)
 - Conditional content fragments within entities
 - Complete entity replacement based on overlays
+- Field-level visibility permissions (public_when_discovered, dm_controlled, dm_only)
 - DM customizations that layer on top of base + overlay content
+- File format representation (content will be authored in TOML/markdown)
 
 ## Success Criteria
 
 - [ ] Schema handles base content + DM overrides without duplication
 - [ ] Query logic correctly resolves "what content to show" given active overlays
+- [ ] Mutual exclusivity for overlays can be validated (prevent conflicting overlays)
+- [ ] Field-level visibility works (public/dm-controlled/dm-only attributes)
 - [ ] DM customizations (disable, edit, replace) work predictably with overlays
 - [ ] Approach is maintainable and reasonably performant (not pathological)
 - [ ] Clear path for extending to support multiple game systems (different stat blocks)
+- [ ] Suggests reasonable file format for TOML/markdown authoring
 
 ## Constraints
 
-- Must use Rails (modern version, 7+)
+- Must use Rails 8
 - Must use PostgreSQL
 - Personal use + alpha testers initially (not internet scale, but not pathological)
+- Content authored in TOML/markdown files, imported to database
 
 ## Approaches
 
@@ -64,11 +71,11 @@ Implement the "Forgotten Stag" tavern scenario:
 - Location: "The Forgotten Stag" tavern
 - Owner: Bran (human bartender, basic stat block)
 
-**Overlay: recently-bubbled**
+**Overlay: recently-bubbled** (mutually exclusive with 100-years-bubbled)
 - Bran gets conditional fragment: skeptical personality note
 - Bran gets conditional item: magical mace
 
-**Overlay: 100-years-bubbled**
+**Overlay: 100-years-bubbled** (mutually exclusive with recently-bubbled)
 - Bran is REPLACED entirely by Elena (his granddaughter)
 
 **Overlay: elemental-maelstorm**
@@ -77,6 +84,12 @@ Implement the "Forgotten Stag" tavern scenario:
 
 **Overlay: political-lockdown**
 - The Forgotten Stag location is REPLACED by "Former Forgotten Stag" (burned-out shell)
+
+**Field Visibility to Test:**
+- Name, description: `public_when_discovered` (players see when DM marks discovered)
+- Personality notes, burn scar: `dm_controlled` (DM can selectively reveal)
+- Stat block (AC, HP, etc.): `dm_only` (never visible to players)
+- Quest hook: `dm_only` (DM-facing design notes)
 
 **DM Customizations to Test:**
 1. **Disable:** Hide the roof materials quest hook
@@ -90,7 +103,9 @@ Implement the "Forgotten Stag" tavern scenario:
 - Campaign with `recently-bubbled` + `elemental-maelstorm` → Bran with skepticism, mace, burn scar, and quest
 - Campaign with `100-years-bubbled` + `elemental-maelstorm` → Elena (replacement wins) - what happens to burn scar/quest?
 - Campaign with `political-lockdown` → Burned shell, no bartender
+- **Mutual exclusivity:** Attempting `recently-bubbled` + `100-years-bubbled` should fail validation
 - Any of above + DM customizations
+- Field visibility: Query for player view vs DM view, verify correct fields shown
 
 ## Effort Limit
 
@@ -104,8 +119,11 @@ Implement the "Forgotten Stag" tavern scenario:
 
 ## Notes
 
-- All approaches use Rails + PostgreSQL
+- All approaches use Rails 8 + PostgreSQL
 - Focus on data modeling patterns, not framework differences
 - The overlay system is the core complexity - getting this wrong would be painful later
 - Multi-game-system support (5e, Pathfinder, Dungeon World) means stat blocks need abstraction
 - Export to PDF/Roll20 is future requirement, not spike focus
+- Each spike should propose a file format for representing this data in TOML/markdown
+- Content will use human-readable IDs (npc-42, loc-5, quest-12) tracked in content-ids.toml
+- Play kit internal identifier: "bubble" (not "Bubble City" - that's display title)
