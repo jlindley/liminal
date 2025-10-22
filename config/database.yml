@@ -25,6 +25,7 @@ development:
   # Use GIT_BRANCH env var to allow different databases per worktree
   # Defaults to 'liminal_development' if not set
   database: <%= ENV.fetch("GIT_BRANCH", "liminal").gsub(/[^a-z0-9_]/, '_') %>_development
+  host: localhost
 
   # The specified database role being used to connect to PostgreSQL.
   # To create additional roles in PostgreSQL see `$ createuser --help`.
@@ -60,6 +61,7 @@ test:
   <<: *default
   # Use GIT_BRANCH env var to allow different test databases per worktree
   database: <%= ENV.fetch("GIT_BRANCH", "liminal").gsub(/[^a-z0-9_]/, '_') %>_test
+  host: localhost
 
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
