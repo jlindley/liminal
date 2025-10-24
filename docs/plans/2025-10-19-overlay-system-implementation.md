@@ -2,9 +2,16 @@
 
 > **For Claude:** Use `${SUPERPOWERS_SKILLS_ROOT}/skills/collaboration/executing-plans/SKILL.md` to implement this plan task-by-task.
 
-**Status:** Ready
+**Status:** Underway (Tasks 1-12 complete, 13-19 pending)
 
 **Goal:** Build the compositional layers overlay system for Liminal using vertical slices, starting with basic entity display and progressing to full overlay resolution with DM customizations.
+
+**Implementation Notes:**
+- Tasks 1-12 completed with code reviews and comprehensive test coverage
+- Campaign model includes additional validations beyond plan: type checking, non-existent overlay rejection, duplicate prevention
+- BaseEntity replacement fields include validations (replaces_must_exist, cannot_replace_self) and unique index constraint
+- EntityResolver includes fix for empty required_overlays bug (uses `required.any?` check)
+- All controller actions include proper error handling and N+1 query fixes
 
 **Architecture:** Vertical slice progression - each slice delivers working end-to-end functionality. Start with minimal BaseEntity → add TOML import → add overlay resolution → add replacements → add DM overrides → add visibility filtering. Service objects handle resolution logic, models stay simple.
 
@@ -956,7 +963,7 @@ class EntityResolver
     # Merge matching conditional fragments
     entity.conditional_fragments.each do |fragment|
       required = fragment["required_overlays"] || []
-      next unless required.all? { |overlay| campaign.active_overlays.include?(overlay) }
+      next unless required.any? && required.all? { |overlay| campaign.active_overlays.include?(overlay) }
 
       resolved.deep_merge!(fragment["data"] || {})
     end
@@ -1030,12 +1037,13 @@ class EntityResolver
     entity.conditional_fragments.each_with_index do |fragment, idx|
       required = fragment["required_overlays"] || []
 
-      if required.all? { |overlay| campaign.active_overlays.include?(overlay) }
+      if required.any? && required.all? { |overlay| campaign.active_overlays.include?(overlay) }
         Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment["data"]&.keys.inspect}"
         resolved.deep_merge!(fragment["data"] || {})
         matched_count += 1
       else
-        Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (not all active)"
+        reason = required.empty? ? "empty required_overlays" : "not all overlays active"
+        Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (#{reason})"
       end
     end
 
@@ -1547,6 +1555,62 @@ git add db/migrate/ db/schema.rb app/services/toml_importer.rb playkits/bubble/e
 git commit -m "feat: add replacement fields to BaseEntity"
 ```
 
+**Step 7: Add validations and tests (IMPORTANT - data integrity)**
+
+After code review, add these validations to prevent data integrity issues:
+
+```ruby
+# app/models/base_entity.rb
+validate :replaces_must_exist, if: -> { replaces.present? }
+validate :cannot_replace_self, if: -> { replaces.present? }
+
+private
+
+def replaces_must_exist
+  unless BaseEntity.exists?(entity_id: replaces)
+    errors.add(:replaces, "must reference an existing entity_id (#{replaces} not found)")
+  end
+end
+
+def cannot_replace_self
+  if replaces == entity_id
+    errors.add(:replaces, "cannot replace itself")
+  end
+end
+```
+
+Create migration for unique constraint (enforces one-to-one replacement mapping):
+
+```bash
+bin/rails generate migration AddUniqueIndexToBaseEntitiesReplaces
+```
+
+```ruby
+# db/migrate/XXXXXX_add_unique_index_to_base_entities_replaces.rb
+class AddUniqueIndexToBaseEntitiesReplaces < ActiveRecord::Migration[8.0]
+  def change
+    add_index :base_entities, :replaces, unique: true, where: "replaces IS NOT NULL"
+  end
+end
+```
+
+Add tests to `test/models/base_entity_test.rb`:
+- Test replaces field storage
+- Test show_when array storage
+- Test show_when defaults to empty array
+- Test validation fails for non-existent replaces reference
+- Test validation fails for self-replacement
+- Test uniqueness constraint prevents duplicate replacements
+
+Run: `bin/rails test test/models/base_entity_test.rb`
+Expected: All tests PASS
+
+Commit:
+```bash
+git add app/models/base_entity.rb db/migrate/ test/models/base_entity_test.rb db/schema.rb
+git commit -m "feat: add validations and tests for replacement fields"
+```
+
 ### Task 13: Update EntityResolver for Replacements
 
 **Files:**
@@ -1667,12 +1731,13 @@ class EntityResolver
       entity.conditional_fragments.each_with_index do |fragment, idx|
         required = fragment["required_overlays"] || []
 
-        if required.all? { |overlay| campaign.active_overlays.include?(overlay) }
+        if required.any? && required.all? { |overlay| campaign.active_overlays.include?(overlay) }
           Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment["data"]&.keys.inspect}"
           resolved.deep_merge!(fragment["data"] || {})
           matched_count += 1
         else
-          Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (not all active)"
+          reason = required.empty? ? "empty required_overlays" : "not all overlays active"
+          Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (#{reason})"
         end
       end
 
@@ -1688,7 +1753,7 @@ class EntityResolver
 
   def self.replacement_active?(entity, campaign)
     required = entity.show_when || []
-    required.all? { |overlay| campaign.active_overlays.include?(overlay) }
+    required.any? && required.all? { |overlay| campaign.active_overlays.include?(overlay) }
   end
 end
 ```
@@ -1989,12 +2054,13 @@ class EntityResolver
       entity.conditional_fragments.each_with_index do |fragment, idx|
         required = fragment["required_overlays"] || []
 
-        if required.all? { |overlay| campaign.active_overlays.include?(overlay) }
+        if required.any? && required.all? { |overlay| campaign.active_overlays.include?(overlay) }
           Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment["data"]&.keys.inspect}"
           resolved.deep_merge!(fragment["data"] || {})
           matched_count += 1
         else
-          Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (not all active)"
+          reason = required.empty? ? "empty required_overlays" : "not all overlays active"
+          Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (#{reason})"
         end
       end
 
@@ -2016,7 +2082,7 @@ class EntityResolver
 
   def self.replacement_active?(entity, campaign)
     required = entity.show_when || []
-    required.all? { |overlay| campaign.active_overlays.include?(overlay) }
+    required.any? && required.all? { |overlay| campaign.active_overlays.include?(overlay) }
   end
 end
 ```
