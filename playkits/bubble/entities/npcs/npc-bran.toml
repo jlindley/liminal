@@ -1,0 +1,34 @@
+# playkits/bubble/entities/npcs/npc-bran.toml
+entity_id = "npc-bran"
+entity_type = "npc"
+name = "Bran"
+
+[core_data]
+name = "Bran"
+race = "Human"
+role = "Bartender"
+description = "A weathered bartender with kind eyes"
+
+[core_data.stats]
+ac = 10
+hp = 8
+
+[[conditional_fragments]]
+required_overlays = ["recently-bubbled"]
+[conditional_fragments.data]
+personality = "Skeptical of outsiders"
+items = ["magical-mace"]
+
+[[conditional_fragments]]
+required_overlays = ["elemental-maelstorm"]
+[conditional_fragments.data]
+description = "A weathered bartender with kind eyes and a burn scar on his left cheek"
+quest_hooks = ["recover-roof-materials"]
+
+[visibility_rules]
+name = "public_when_discovered"
+description = "public_when_discovered"
+personality = "dm_controlled"
+role = "public_when_discovered"
+stats = "dm_only"
+quest_hooks = "dm_only"
