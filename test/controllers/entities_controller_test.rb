@@ -42,4 +42,10 @@ class EntitiesControllerTest < ActionDispatch::IntegrationTest
     get "/campaigns/#{campaign.id}/entities/npc-missing"
     assert_response :not_found
   end
+
+  test "returns 404 for missing campaign" do
+    get "/campaigns/999999/entities/npc-bran"
+    assert_response :not_found
+    assert_match /Campaign not found/, response.body
+  end
 end

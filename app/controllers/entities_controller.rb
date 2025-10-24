@@ -8,6 +8,7 @@ class EntitiesController < ApplicationController
 
     if @resolved_data.nil?
       render plain: "Entity not found", status: :not_found
+      return
     end
   rescue ActiveRecord::RecordNotFound
     render plain: "Campaign not found", status: :not_found

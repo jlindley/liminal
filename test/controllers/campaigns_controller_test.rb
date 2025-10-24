@@ -46,4 +46,15 @@ class CampaignsControllerTest < ActionDispatch::IntegrationTest
     }
     assert_response :unprocessable_entity
   end
+
+  test "shows campaign with overlays and entities" do
+    campaign = Campaign.create!(name: "Test Campaign", active_overlays: ["recently-bubbled"])
+    BaseEntity.create!(entity_id: "test-npc", name: "Test NPC", entity_type: "npc", core_data: {})
+
+    get "/campaigns/#{campaign.id}"
+    assert_response :success
+    assert_select "body", /Test Campaign/
+    assert_select "body", /Recently Bubbled/
+    assert_select "body", /Test NPC/
+  end
 end

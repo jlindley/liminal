@@ -6,6 +6,7 @@ class CampaignsController < ApplicationController
   def show
     @campaign = Campaign.find(params[:id])
     @entities = BaseEntity.all
+    @active_overlays = Overlay.where(overlay_id: @campaign.active_overlays).index_by(&:overlay_id)
   end
 
   def new

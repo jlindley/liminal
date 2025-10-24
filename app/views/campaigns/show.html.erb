@@ -10,7 +10,7 @@
     <% if @campaign.active_overlays.any? %>
       <ul class="list-disc list-inside">
         <% @campaign.active_overlays.each do |overlay_id| %>
-          <% overlay = Overlay.find_by(overlay_id: overlay_id) %>
+          <% overlay = @active_overlays[overlay_id] %>
           <li><%= overlay&.name || overlay_id %> (<%= overlay&.overlay_type %>)</li>
         <% end %>
       </ul>
