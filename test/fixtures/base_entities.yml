@@ -1,17 +1,17 @@
 # Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
 
 one:
-  entity_type: MyString
-  entity_id: MyString
-  name: MyString
-  core_data: 
-  conditional_fragments: 
-  visibility_rules: 
+  entity_type: npc
+  entity_id: fixture-one
+  name: Fixture One
+  core_data: {}
+  conditional_fragments: []
+  visibility_rules: {}
 
 two:
-  entity_type: MyString
-  entity_id: MyString
-  name: MyString
-  core_data: 
-  conditional_fragments: 
-  visibility_rules: 
+  entity_type: npc
+  entity_id: fixture-two
+  name: Fixture Two
+  core_data: {}
+  conditional_fragments: []
+  visibility_rules: {} 

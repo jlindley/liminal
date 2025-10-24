@@ -15,14 +15,16 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_20_011637) do
   enable_extension "pg_catalog.plpgsql"
 
   create_table "base_entities", force: :cascade do |t|
-    t.string "entity_type"
-    t.string "entity_id"
-    t.string "name"
-    t.jsonb "core_data"
-    t.jsonb "conditional_fragments"
-    t.jsonb "visibility_rules"
+    t.string "entity_id", null: false
+    t.string "entity_type", null: false
+    t.string "name", null: false
+    t.jsonb "core_data", default: {}, null: false
+    t.jsonb "conditional_fragments", default: [], null: false
+    t.jsonb "visibility_rules", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["entity_id"], name: "index_base_entities_on_entity_id", unique: true
+    t.index ["entity_type"], name: "index_base_entities_on_entity_type"
   end
 
   create_table "campaigns", force: :cascade do |t|
