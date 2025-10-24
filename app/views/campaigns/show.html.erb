@@ -1,0 +1,34 @@
+<div class="max-w-4xl mx-auto p-6">
+  <div class="mb-4">
+    <a href="<%= campaigns_path %>" class="text-blue-600 hover:underline">&larr; Back to Campaigns</a>
+  </div>
+
+  <h1 class="text-3xl font-bold mb-4"><%= @campaign.name %></h1>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-xl font-semibold mb-2">Active Overlays</h2>
+    <% if @campaign.active_overlays.any? %>
+      <ul class="list-disc list-inside">
+        <% @campaign.active_overlays.each do |overlay_id| %>
+          <% overlay = Overlay.find_by(overlay_id: overlay_id) %>
+          <li><%= overlay&.name || overlay_id %> (<%= overlay&.overlay_type %>)</li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="text-gray-500">No overlays active</p>
+    <% end %>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6">
+    <h2 class="text-xl font-semibold mb-4">Entities</h2>
+    <div class="space-y-2">
+      <% @entities.each do |entity| %>
+        <div>
+          <a href="<%= campaign_entity_path(@campaign, entity.entity_id) %>" class="text-blue-600 hover:underline">
+            <%= entity.name %> (<%= entity.entity_type %>)
+          </a>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
