@@ -20,12 +20,13 @@ class EntityResolver
     entity.conditional_fragments.each_with_index do |fragment, idx|
       required = fragment["required_overlays"] || []
 
-      if required.all? { |overlay| campaign.active_overlays.include?(overlay) }
+      if required.any? && required.all? { |overlay| campaign.active_overlays.include?(overlay) }
         Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment["data"]&.keys.inspect}"
         resolved.deep_merge!(fragment["data"] || {})
         matched_count += 1
       else
-        Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (not all active)"
+        reason = required.empty? ? "empty required_overlays" : "not all overlays active"
+        Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (#{reason})"
       end
     end
 

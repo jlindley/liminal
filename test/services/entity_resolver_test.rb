@@ -78,6 +78,27 @@ class EntityResolverTest < ActiveSupport::TestCase
     assert_nil result["items"]
   end
 
+  test "does not merge fragments with empty required_overlays" do
+    # Setup: entity with fragment that has empty required_overlays
+    entity = BaseEntity.create!(
+      entity_id: "test-empty",
+      entity_type: "npc",
+      name: "Test",
+      core_data: {"name" => "Test"},
+      conditional_fragments: [
+        {
+          "required_overlays" => [],
+          "data" => {"should_not_appear" => "ever"}
+        }
+      ]
+    )
+
+    campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled"])
+    result = EntityResolver.resolve(entity_id: "test-empty", campaign: campaign)
+
+    assert_nil result["should_not_appear"], "Fragment with empty required_overlays should not merge"
+  end
+
   test "returns nil for missing entity" do
     campaign = Campaign.create!(name: "Test", active_overlays: [])
     result = EntityResolver.resolve(entity_id: "npc-missing", campaign: campaign)
