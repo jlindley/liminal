@@ -2,11 +2,13 @@
 
 > **For Claude:** Use `${SUPERPOWERS_SKILLS_ROOT}/skills/collaboration/executing-plans/SKILL.md` to implement this plan task-by-task.
 
+**Status:** Ready
+
 **Goal:** Build the compositional layers overlay system for Liminal using vertical slices, starting with basic entity display and progressing to full overlay resolution with DM customizations.
 
 **Architecture:** Vertical slice progression - each slice delivers working end-to-end functionality. Start with minimal BaseEntity → add TOML import → add overlay resolution → add replacements → add DM overrides → add visibility filtering. Service objects handle resolution logic, models stay simple.
 
-**Tech Stack:** Rails 8, PostgreSQL with jsonb columns, RSpec, Turbo, Tailwind CSS
+**Tech Stack:** Rails 8, PostgreSQL with jsonb columns, Minitest, Turbo, Tailwind CSS
 
 ---
 
@@ -17,53 +19,49 @@
 **Files:**
 - Create: `app/models/base_entity.rb`
 - Create: `db/migrate/XXXXXX_create_base_entities.rb`
-- Create: `spec/models/base_entity_spec.rb`
+- Create: `test/models/base_entity_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/models/base_entity_spec.rb
-require 'rails_helper'
+# test/models/base_entity_test.rb
+require "test_helper"
 
-RSpec.describe BaseEntity, type: :model do
-  describe 'validations' do
-    it 'requires entity_id' do
-      entity = BaseEntity.new(entity_type: 'npc', name: 'Bran', core_data: {})
-      expect(entity).not_to be_valid
-      expect(entity.errors[:entity_id]).to include("can't be blank")
-    end
-
-    it 'requires entity_type' do
-      entity = BaseEntity.new(entity_id: 'npc-bran', name: 'Bran', core_data: {})
-      expect(entity).not_to be_valid
-      expect(entity.errors[:entity_type]).to include("can't be blank")
-    end
-
-    it 'requires unique entity_id' do
-      BaseEntity.create!(entity_id: 'npc-bran', entity_type: 'npc', name: 'Bran', core_data: {})
-      duplicate = BaseEntity.new(entity_id: 'npc-bran', entity_type: 'npc', name: 'Other', core_data: {})
-      expect(duplicate).not_to be_valid
-      expect(duplicate.errors[:entity_id]).to include("has already been taken")
-    end
+class BaseEntityTest < ActiveSupport::TestCase
+  test "requires entity_id" do
+    entity = BaseEntity.new(entity_type: "npc", name: "Bran", core_data: {})
+    assert_not entity.valid?
+    assert_includes entity.errors[:entity_id], "can't be blank"
   end
 
-  describe 'core_data' do
-    it 'stores arbitrary JSON data' do
-      entity = BaseEntity.create!(
-        entity_id: 'npc-bran',
-        entity_type: 'npc',
-        name: 'Bran',
-        core_data: { role: 'Bartender', race: 'Human' }
-      )
-      expect(entity.core_data['role']).to eq('Bartender')
-    end
+  test "requires entity_type" do
+    entity = BaseEntity.new(entity_id: "npc-bran", name: "Bran", core_data: {})
+    assert_not entity.valid?
+    assert_includes entity.errors[:entity_type], "can't be blank"
+  end
+
+  test "requires unique entity_id" do
+    BaseEntity.create!(entity_id: "npc-bran", entity_type: "npc", name: "Bran", core_data: {})
+    duplicate = BaseEntity.new(entity_id: "npc-bran", entity_type: "npc", name: "Other", core_data: {})
+    assert_not duplicate.valid?
+    assert_includes duplicate.errors[:entity_id], "has already been taken"
+  end
+
+  test "stores arbitrary JSON data in core_data" do
+    entity = BaseEntity.create!(
+      entity_id: "npc-bran",
+      entity_type: "npc",
+      name: "Bran",
+      core_data: { role: "Bartender", race: "Human" }
+    )
+    assert_equal "Bartender", entity.core_data["role"]
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/models/base_entity_spec.rb`
+Run: `bin/rails test test/models/base_entity_test.rb`
 Expected: FAIL with "uninitialized constant BaseEntity"
 
 **Step 3: Create migration**
@@ -112,13 +110,13 @@ end
 
 **Step 6: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/models/base_entity_spec.rb`
+Run: `bin/rails test test/models/base_entity_test.rb`
 Expected: All tests PASS
 
 **Step 7: Commit**
 
 ```bash
-git add app/models/base_entity.rb db/migrate/ spec/models/base_entity_spec.rb db/schema.rb
+git add app/models/base_entity.rb db/migrate/ test/models/base_entity_test.rb db/schema.rb
 git commit -m "feat: add BaseEntity model with validations"
 ```
 
@@ -127,48 +125,46 @@ git commit -m "feat: add BaseEntity model with validations"
 **Files:**
 - Create: `app/controllers/entities_controller.rb`
 - Create: `app/views/entities/show.html.erb`
-- Create: `spec/requests/entities_spec.rb`
+- Create: `test/controllers/entities_controller_test.rb`
 - Modify: `config/routes.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/requests/entities_spec.rb
-require 'rails_helper'
+# test/controllers/entities_controller_test.rb
+require "test_helper"
 
-RSpec.describe "Entities", type: :request do
-  describe "GET /entities/:entity_id" do
-    it "displays entity core data" do
-      entity = BaseEntity.create!(
-        entity_id: 'npc-bran',
-        entity_type: 'npc',
-        name: 'Bran',
-        core_data: {
-          role: 'Bartender',
-          race: 'Human',
-          description: 'A weathered bartender with kind eyes'
-        }
-      )
+class EntitiesControllerTest < ActionDispatch::IntegrationTest
+  test "displays entity core data" do
+    entity = BaseEntity.create!(
+      entity_id: "npc-bran",
+      entity_type: "npc",
+      name: "Bran",
+      core_data: {
+        "role" => "Bartender",
+        "race" => "Human",
+        "description" => "A weathered bartender with kind eyes"
+      }
+    )
 
-      get "/entities/npc-bran"
+    get "/entities/npc-bran"
 
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('Bran')
-      expect(response.body).to include('Bartender')
-      expect(response.body).to include('A weathered bartender with kind eyes')
-    end
+    assert_response :success
+    assert_select "body", /Bran/
+    assert_select "body", /Bartender/
+    assert_select "body", /A weathered bartender with kind eyes/
+  end
 
-    it "returns 404 for missing entity" do
-      get "/entities/npc-missing"
-      expect(response).to have_http_status(:not_found)
-    end
+  test "returns 404 for missing entity" do
+    get "/entities/npc-missing"
+    assert_response :not_found
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/requests/entities_spec.rb`
+Run: `bin/rails test test/controllers/entities_controller_test.rb`
 Expected: FAIL with "No route matches"
 
 **Step 3: Add route**
@@ -222,13 +218,13 @@ end
 
 **Step 6: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/requests/entities_spec.rb`
+Run: `bin/rails test test/controllers/entities_controller_test.rb`
 Expected: All tests PASS
 
 **Step 7: Commit**
 
 ```bash
-git add app/controllers/entities_controller.rb app/views/entities/show.html.erb spec/requests/entities_spec.rb config/routes.rb
+git add app/controllers/entities_controller.rb app/views/entities/show.html.erb test/controllers/entities_controller_test.rb config/routes.rb
 git commit -m "feat: add entities display with basic view"
 ```
 
@@ -243,23 +239,21 @@ git commit -m "feat: add entities display with basic view"
 # db/seeds.rb
 puts "Creating base entities..."
 
-BaseEntity.create!([
-  {
-    entity_id: 'npc-bran',
-    entity_type: 'npc',
-    name: 'Bran',
-    core_data: {
-      role: 'Bartender',
-      race: 'Human',
-      description: 'A weathered bartender with kind eyes'
-    },
-    visibility_rules: {
-      name: 'public_when_discovered',
-      description: 'public_when_discovered',
-      role: 'public_when_discovered'
-    }
+BaseEntity.create!(
+  entity_id: "npc-bran",
+  entity_type: "npc",
+  name: "Bran",
+  core_data: {
+    role: "Bartender",
+    race: "Human",
+    description: "A weathered bartender with kind eyes"
+  },
+  visibility_rules: {
+    name: "public_when_discovered",
+    description: "public_when_discovered",
+    role: "public_when_discovered"
   }
-])
+)
 
 puts "Created #{BaseEntity.count} entities"
 ```
@@ -290,7 +284,7 @@ git commit -m "feat: add seed data for manual testing"
 
 **Files:**
 - Create: `app/services/toml_importer.rb`
-- Create: `spec/services/toml_importer_spec.rb`
+- Create: `test/services/toml_importer_test.rb`
 - Create: `playkits/bubble/entities/npcs/npc-bran.toml`
 
 **Step 1: Create fixture TOML file**
@@ -335,52 +329,52 @@ quest_hooks = "dm_only"
 **Step 2: Write the failing test**
 
 ```ruby
-# spec/services/toml_importer_spec.rb
-require 'rails_helper'
+# test/services/toml_importer_test.rb
+require "test_helper"
 
-RSpec.describe TomlImporter do
-  let(:fixture_path) { Rails.root.join('playkits/bubble/entities/npcs/npc-bran.toml') }
+class TomlImporterTest < ActiveSupport::TestCase
+  def setup
+    @fixture_path = Rails.root.join("playkits/bubble/entities/npcs/npc-bran.toml")
+  end
 
-  describe '.import_file' do
-    it 'creates BaseEntity from TOML file' do
-      expect {
-        TomlImporter.import_file(fixture_path)
-      }.to change { BaseEntity.count }.by(1)
-
-      entity = BaseEntity.find_by(entity_id: 'npc-bran')
-      expect(entity.name).to eq('Bran')
-      expect(entity.entity_type).to eq('npc')
-      expect(entity.core_data['role']).to eq('Bartender')
-      expect(entity.core_data['stats']['ac']).to eq(10)
+  test "creates BaseEntity from TOML file" do
+    assert_difference "BaseEntity.count", 1 do
+      TomlImporter.import_file(@fixture_path)
     end
 
-    it 'imports conditional_fragments' do
-      TomlImporter.import_file(fixture_path)
-      entity = BaseEntity.find_by(entity_id: 'npc-bran')
+    entity = BaseEntity.find_by(entity_id: "npc-bran")
+    assert_equal "Bran", entity.name
+    assert_equal "npc", entity.entity_type
+    assert_equal "Bartender", entity.core_data["role"]
+    assert_equal 10, entity.core_data["stats"]["ac"]
+  end
 
-      expect(entity.conditional_fragments.length).to eq(2)
+  test "imports conditional_fragments" do
+    TomlImporter.import_file(@fixture_path)
+    entity = BaseEntity.find_by(entity_id: "npc-bran")
 
-      recent_fragment = entity.conditional_fragments.find { |f| f['required_overlays'] == ['recently-bubbled'] }
-      expect(recent_fragment['data']['personality']).to eq('Skeptical of outsiders')
+    assert_equal 2, entity.conditional_fragments.length
 
-      elemental_fragment = entity.conditional_fragments.find { |f| f['required_overlays'] == ['elemental-maelstorm'] }
-      expect(elemental_fragment['data']['quest_hooks']).to eq(['recover-roof-materials'])
-    end
+    recent_fragment = entity.conditional_fragments.find { |f| f["required_overlays"] == ["recently-bubbled"] }
+    assert_equal "Skeptical of outsiders", recent_fragment["data"]["personality"]
 
-    it 'imports visibility_rules' do
-      TomlImporter.import_file(fixture_path)
-      entity = BaseEntity.find_by(entity_id: 'npc-bran')
+    elemental_fragment = entity.conditional_fragments.find { |f| f["required_overlays"] == ["elemental-maelstorm"] }
+    assert_equal ["recover-roof-materials"], elemental_fragment["data"]["quest_hooks"]
+  end
 
-      expect(entity.visibility_rules['name']).to eq('public_when_discovered')
-      expect(entity.visibility_rules['stats']).to eq('dm_only')
-    end
+  test "imports visibility_rules" do
+    TomlImporter.import_file(@fixture_path)
+    entity = BaseEntity.find_by(entity_id: "npc-bran")
 
-    it 'updates existing entity on re-import' do
-      TomlImporter.import_file(fixture_path)
+    assert_equal "public_when_discovered", entity.visibility_rules["name"]
+    assert_equal "dm_only", entity.visibility_rules["stats"]
+  end
 
-      expect {
-        TomlImporter.import_file(fixture_path)
-      }.not_to change { BaseEntity.count }
+  test "updates existing entity on re-import" do
+    TomlImporter.import_file(@fixture_path)
+
+    assert_no_difference "BaseEntity.count" do
+      TomlImporter.import_file(@fixture_path)
     end
   end
 end
@@ -388,7 +382,7 @@ end
 
 **Step 3: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/services/toml_importer_spec.rb`
+Run: `bin/rails test test/services/toml_importer_test.rb`
 Expected: FAIL with "uninitialized constant TomlImporter"
 
 **Step 4: Add toml gem to Gemfile**
@@ -404,18 +398,18 @@ Run: `bundle install`
 
 ```ruby
 # app/services/toml_importer.rb
-require 'toml-rb'
+require "toml-rb"
 
 class TomlImporter
   def self.import_file(file_path)
     data = TomlRB.load_file(file_path)
 
-    BaseEntity.find_or_initialize_by(entity_id: data['entity_id']).tap do |entity|
-      entity.entity_type = data['entity_type']
-      entity.name = data['name']
-      entity.core_data = data['core_data'] || {}
-      entity.conditional_fragments = data['conditional_fragments'] || []
-      entity.visibility_rules = data['visibility_rules'] || {}
+    BaseEntity.find_or_initialize_by(entity_id: data["entity_id"]).tap do |entity|
+      entity.entity_type = data["entity_type"]
+      entity.name = data["name"]
+      entity.core_data = data["core_data"] || {}
+      entity.conditional_fragments = data["conditional_fragments"] || []
+      entity.visibility_rules = data["visibility_rules"] || {}
       entity.save!
     end
   end
@@ -424,13 +418,13 @@ end
 
 **Step 6: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/services/toml_importer_spec.rb`
+Run: `bin/rails test test/services/toml_importer_test.rb`
 Expected: All tests PASS
 
 **Step 7: Commit**
 
 ```bash
-git add Gemfile Gemfile.lock app/services/toml_importer.rb spec/services/toml_importer_spec.rb playkits/
+git add Gemfile Gemfile.lock app/services/toml_importer.rb test/services/toml_importer_test.rb playkits/
 git commit -m "feat: add TOML importer service"
 ```
 
@@ -446,7 +440,7 @@ git commit -m "feat: add TOML importer service"
 namespace :playkit do
   desc "Import all TOML files from playkits directory"
   task import: :environment do
-    playkit_dir = Rails.root.join('playkits')
+    playkit_dir = Rails.root.join("playkits")
 
     unless playkit_dir.exist?
       puts "No playkits directory found at #{playkit_dir}"
@@ -454,8 +448,8 @@ namespace :playkit do
     end
 
     imported_count = 0
-    Dir.glob(playkit_dir.join('**/*.toml')).each do |file_path|
-      next if File.basename(file_path) == 'overlays.toml'
+    Dir.glob(playkit_dir.join("**/*.toml")).each do |file_path|
+      next if File.basename(file_path) == "overlays.toml"
 
       puts "Importing #{file_path}..."
       TomlImporter.import_file(file_path)
@@ -478,7 +472,7 @@ Expected: "Imported 1 entities"
 
 Run: `bin/rails console`
 ```ruby
-BaseEntity.find_by(entity_id: 'npc-bran').core_data
+BaseEntity.find_by(entity_id: "npc-bran").core_data
 ```
 Expected: Hash with Bran's data
 
@@ -498,52 +492,50 @@ git commit -m "feat: add rake task for importing playkits"
 **Files:**
 - Create: `app/models/overlay.rb`
 - Create: `db/migrate/XXXXXX_create_overlays.rb`
-- Create: `spec/models/overlay_spec.rb`
+- Create: `test/models/overlay_test.rb`
 - Create: `playkits/bubble/overlays/overlays.toml`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/models/overlay_spec.rb
-require 'rails_helper'
+# test/models/overlay_test.rb
+require "test_helper"
 
-RSpec.describe Overlay, type: :model do
-  describe 'validations' do
-    it 'requires overlay_id' do
-      overlay = Overlay.new(name: 'Recently Bubbled', overlay_type: 'major')
-      expect(overlay).not_to be_valid
-    end
-
-    it 'requires unique overlay_id' do
-      Overlay.create!(overlay_id: 'recently-bubbled', name: 'Recently', overlay_type: 'major')
-      duplicate = Overlay.new(overlay_id: 'recently-bubbled', name: 'Other', overlay_type: 'major')
-      expect(duplicate).not_to be_valid
-    end
-
-    it 'validates overlay_type is major or flavor' do
-      overlay = Overlay.new(overlay_id: 'test', name: 'Test', overlay_type: 'invalid')
-      expect(overlay).not_to be_valid
-      expect(overlay.errors[:overlay_type]).to include('is not included in the list')
-    end
+class OverlayTest < ActiveSupport::TestCase
+  test "requires overlay_id" do
+    overlay = Overlay.new(name: "Recently Bubbled", overlay_type: "major")
+    assert_not overlay.valid?
+    assert_includes overlay.errors[:overlay_id], "can't be blank"
   end
 
-  describe 'mutual_exclusivity' do
-    it 'stores array of mutually exclusive overlays' do
-      overlay = Overlay.create!(
-        overlay_id: 'recently-bubbled',
-        name: 'Recently Bubbled',
-        overlay_type: 'major',
-        mutually_exclusive_with: ['100-years-bubbled']
-      )
-      expect(overlay.mutually_exclusive_with).to eq(['100-years-bubbled'])
-    end
+  test "requires unique overlay_id" do
+    Overlay.create!(overlay_id: "recently-bubbled", name: "Recently", overlay_type: "major")
+    duplicate = Overlay.new(overlay_id: "recently-bubbled", name: "Other", overlay_type: "major")
+    assert_not duplicate.valid?
+    assert_includes duplicate.errors[:overlay_id], "has already been taken"
+  end
+
+  test "validates overlay_type is major or flavor" do
+    overlay = Overlay.new(overlay_id: "test", name: "Test", overlay_type: "invalid")
+    assert_not overlay.valid?
+    assert_includes overlay.errors[:overlay_type], "is not included in the list"
+  end
+
+  test "stores array of mutually exclusive overlays" do
+    overlay = Overlay.create!(
+      overlay_id: "recently-bubbled",
+      name: "Recently Bubbled",
+      overlay_type: "major",
+      mutually_exclusive_with: ["100-years-bubbled"]
+    )
+    assert_equal ["100-years-bubbled"], overlay.mutually_exclusive_with
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/models/overlay_spec.rb`
+Run: `bin/rails test test/models/overlay_test.rb`
 Expected: FAIL with "uninitialized constant Overlay"
 
 **Step 3: Create migration**
@@ -588,7 +580,7 @@ end
 
 **Step 6: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/models/overlay_spec.rb`
+Run: `bin/rails test test/models/overlay_test.rb`
 Expected: All tests PASS
 
 **Step 7: Create overlays TOML**
@@ -624,7 +616,7 @@ mutually_exclusive_with = []
 **Step 8: Commit**
 
 ```bash
-git add app/models/overlay.rb db/migrate/ spec/models/overlay_spec.rb db/schema.rb playkits/bubble/overlays/
+git add app/models/overlay.rb db/migrate/ test/models/overlay_test.rb db/schema.rb playkits/bubble/overlays/
 git commit -m "feat: add Overlay model"
 ```
 
@@ -632,31 +624,29 @@ git commit -m "feat: add Overlay model"
 
 **Files:**
 - Modify: `app/services/toml_importer.rb`
-- Modify: `spec/services/toml_importer_spec.rb`
+- Modify: `test/services/toml_importer_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/services/toml_importer_spec.rb (add this describe block)
-describe '.import_overlays' do
-  let(:overlays_path) { Rails.root.join('playkits/bubble/overlays/overlays.toml') }
+# test/services/toml_importer_test.rb (add this test)
+test "imports all overlays from overlays.toml" do
+  overlays_path = Rails.root.join("playkits/bubble/overlays/overlays.toml")
 
-  it 'imports all overlays from overlays.toml' do
-    expect {
-      TomlImporter.import_overlays(overlays_path)
-    }.to change { Overlay.count }.by(4)
-
-    recently = Overlay.find_by(overlay_id: 'recently-bubbled')
-    expect(recently.name).to eq('Recently Bubbled')
-    expect(recently.overlay_type).to eq('major')
-    expect(recently.mutually_exclusive_with).to eq(['100-years-bubbled'])
+  assert_difference "Overlay.count", 4 do
+    TomlImporter.import_overlays(overlays_path)
   end
+
+  recently = Overlay.find_by(overlay_id: "recently-bubbled")
+  assert_equal "Recently Bubbled", recently.name
+  assert_equal "major", recently.overlay_type
+  assert_equal ["100-years-bubbled"], recently.mutually_exclusive_with
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/services/toml_importer_spec.rb`
+Run: `bin/rails test test/services/toml_importer_test.rb`
 Expected: FAIL with "undefined method `import_overlays'"
 
 **Step 3: Implement import_overlays**
@@ -666,11 +656,11 @@ Expected: FAIL with "undefined method `import_overlays'"
 def self.import_overlays(file_path)
   data = TomlRB.load_file(file_path)
 
-  data['overlay'].each do |overlay_data|
-    Overlay.find_or_initialize_by(overlay_id: overlay_data['overlay_id']).tap do |overlay|
-      overlay.name = overlay_data['name']
-      overlay.overlay_type = overlay_data['overlay_type']
-      overlay.mutually_exclusive_with = overlay_data['mutually_exclusive_with'] || []
+  data["overlay"].each do |overlay_data|
+    Overlay.find_or_initialize_by(overlay_id: overlay_data["overlay_id"]).tap do |overlay|
+      overlay.name = overlay_data["name"]
+      overlay.overlay_type = overlay_data["overlay_type"]
+      overlay.mutually_exclusive_with = overlay_data["mutually_exclusive_with"] || []
       overlay.save!
     end
   end
@@ -679,7 +669,7 @@ end
 
 **Step 4: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/services/toml_importer_spec.rb`
+Run: `bin/rails test test/services/toml_importer_test.rb`
 Expected: All tests PASS
 
 **Step 5: Update rake task**
@@ -689,7 +679,7 @@ Expected: All tests PASS
 namespace :playkit do
   desc "Import all TOML files from playkits directory"
   task import: :environment do
-    playkit_dir = Rails.root.join('playkits')
+    playkit_dir = Rails.root.join("playkits")
 
     unless playkit_dir.exist?
       puts "No playkits directory found at #{playkit_dir}"
@@ -697,7 +687,7 @@ namespace :playkit do
     end
 
     # Import overlays first
-    overlays_file = playkit_dir.join('bubble/overlays/overlays.toml')
+    overlays_file = playkit_dir.join("bubble/overlays/overlays.toml")
     if overlays_file.exist?
       puts "Importing overlays from #{overlays_file}..."
       TomlImporter.import_overlays(overlays_file)
@@ -706,8 +696,8 @@ namespace :playkit do
 
     # Import entities
     imported_count = 0
-    Dir.glob(playkit_dir.join('**/*.toml')).each do |file_path|
-      next if File.basename(file_path) == 'overlays.toml'
+    Dir.glob(playkit_dir.join("**/*.toml")).each do |file_path|
+      next if File.basename(file_path) == "overlays.toml"
 
       puts "Importing #{file_path}..."
       TomlImporter.import_file(file_path)
@@ -729,7 +719,7 @@ Expected: Overlays and entities imported
 **Step 7: Commit**
 
 ```bash
-git add app/services/toml_importer.rb spec/services/toml_importer_spec.rb lib/tasks/import.rake
+git add app/services/toml_importer.rb test/services/toml_importer_test.rb lib/tasks/import.rake
 git commit -m "feat: add overlay import to TomlImporter"
 ```
 
@@ -738,58 +728,56 @@ git commit -m "feat: add overlay import to TomlImporter"
 **Files:**
 - Create: `app/models/campaign.rb`
 - Create: `db/migrate/XXXXXX_create_campaigns.rb`
-- Create: `spec/models/campaign_spec.rb`
+- Create: `test/models/campaign_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/models/campaign_spec.rb
-require 'rails_helper'
+# test/models/campaign_test.rb
+require "test_helper"
 
-RSpec.describe Campaign, type: :model do
-  before do
+class CampaignTest < ActiveSupport::TestCase
+  def setup
     Overlay.create!([
-      { overlay_id: 'recently-bubbled', name: 'Recently Bubbled', overlay_type: 'major', mutually_exclusive_with: ['100-years-bubbled'] },
-      { overlay_id: '100-years-bubbled', name: '100 Years Bubbled', overlay_type: 'major', mutually_exclusive_with: ['recently-bubbled'] },
-      { overlay_id: 'elemental-maelstorm', name: 'Elemental Maelstorm', overlay_type: 'flavor', mutually_exclusive_with: [] }
+      { overlay_id: "recently-bubbled", name: "Recently Bubbled", overlay_type: "major", mutually_exclusive_with: ["100-years-bubbled"] },
+      { overlay_id: "100-years-bubbled", name: "100 Years Bubbled", overlay_type: "major", mutually_exclusive_with: ["recently-bubbled"] },
+      { overlay_id: "elemental-maelstorm", name: "Elemental Maelstorm", overlay_type: "flavor", mutually_exclusive_with: [] }
     ])
   end
 
-  describe 'validations' do
-    it 'requires name' do
-      campaign = Campaign.new(active_overlays: [])
-      expect(campaign).not_to be_valid
-      expect(campaign.errors[:name]).to include("can't be blank")
-    end
+  test "requires name" do
+    campaign = Campaign.new(active_overlays: [])
+    assert_not campaign.valid?
+    assert_includes campaign.errors[:name], "can't be blank"
+  end
 
-    it 'validates mutually exclusive overlays' do
-      campaign = Campaign.new(
-        name: 'Test Campaign',
-        active_overlays: ['recently-bubbled', '100-years-bubbled']
-      )
-      expect(campaign).not_to be_valid
-      expect(campaign.errors[:active_overlays]).to include(/mutually exclusive/)
-    end
+  test "validates mutually exclusive overlays" do
+    campaign = Campaign.new(
+      name: "Test Campaign",
+      active_overlays: ["recently-bubbled", "100-years-bubbled"]
+    )
+    assert_not campaign.valid?
+    assert_match /mutually exclusive/, campaign.errors[:active_overlays].first
+  end
 
-    it 'allows non-conflicting overlays' do
-      campaign = Campaign.new(
-        name: 'Test Campaign',
-        active_overlays: ['recently-bubbled', 'elemental-maelstorm']
-      )
-      expect(campaign).to be_valid
-    end
+  test "allows non-conflicting overlays" do
+    campaign = Campaign.new(
+      name: "Test Campaign",
+      active_overlays: ["recently-bubbled", "elemental-maelstorm"]
+    )
+    assert campaign.valid?
+  end
 
-    it 'allows empty active_overlays' do
-      campaign = Campaign.new(name: 'Test Campaign', active_overlays: [])
-      expect(campaign).to be_valid
-    end
+  test "allows empty active_overlays" do
+    campaign = Campaign.new(name: "Test Campaign", active_overlays: [])
+    assert campaign.valid?
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/models/campaign_spec.rb`
+Run: `bin/rails test test/models/campaign_test.rb`
 Expected: FAIL with "uninitialized constant Campaign"
 
 **Step 3: Create migration**
@@ -847,13 +835,13 @@ end
 
 **Step 6: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/models/campaign_spec.rb`
+Run: `bin/rails test test/models/campaign_test.rb`
 Expected: All tests PASS
 
 **Step 7: Commit**
 
 ```bash
-git add app/models/campaign.rb db/migrate/ spec/models/campaign_spec.rb db/schema.rb
+git add app/models/campaign.rb db/migrate/ test/models/campaign_test.rb db/schema.rb
 git commit -m "feat: add Campaign model with mutual exclusivity validation"
 ```
 
@@ -861,113 +849,96 @@ git commit -m "feat: add Campaign model with mutual exclusivity validation"
 
 **Files:**
 - Create: `app/services/entity_resolver.rb`
-- Create: `spec/services/entity_resolver_spec.rb`
+- Create: `test/services/entity_resolver_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/services/entity_resolver_spec.rb
-require 'rails_helper'
+# test/services/entity_resolver_test.rb
+require "test_helper"
 
-RSpec.describe EntityResolver do
-  let!(:bran) do
-    BaseEntity.create!(
-      entity_id: 'npc-bran',
-      entity_type: 'npc',
-      name: 'Bran',
+class EntityResolverTest < ActiveSupport::TestCase
+  def setup
+    @bran = BaseEntity.create!(
+      entity_id: "npc-bran",
+      entity_type: "npc",
+      name: "Bran",
       core_data: {
-        'name' => 'Bran',
-        'role' => 'Bartender',
-        'description' => 'A weathered bartender with kind eyes'
+        "name" => "Bran",
+        "role" => "Bartender",
+        "description" => "A weathered bartender with kind eyes"
       },
       conditional_fragments: [
         {
-          'required_overlays' => ['recently-bubbled'],
-          'data' => {
-            'personality' => 'Skeptical of outsiders',
-            'items' => ['magical-mace']
+          "required_overlays" => ["recently-bubbled"],
+          "data" => {
+            "personality" => "Skeptical of outsiders",
+            "items" => ["magical-mace"]
           }
         },
         {
-          'required_overlays' => ['elemental-maelstorm'],
-          'data' => {
-            'description' => 'A weathered bartender with kind eyes and a burn scar on his left cheek',
-            'quest_hooks' => ['recover-roof-materials']
+          "required_overlays" => ["elemental-maelstorm"],
+          "data" => {
+            "description" => "A weathered bartender with kind eyes and a burn scar on his left cheek",
+            "quest_hooks" => ["recover-roof-materials"]
           }
         }
       ]
     )
   end
 
-  describe '.resolve' do
-    context 'with no active overlays' do
-      let(:campaign) { Campaign.create!(name: 'Test', active_overlays: []) }
+  test "returns only core_data with no active overlays" do
+    campaign = Campaign.create!(name: "Test", active_overlays: [])
+    result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-      it 'returns only core_data' do
-        result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+    assert_equal "Bran", result["name"]
+    assert_equal "Bartender", result["role"]
+    assert_equal "A weathered bartender with kind eyes", result["description"]
+    assert_nil result["personality"]
+    assert_nil result["quest_hooks"]
+  end
 
-        expect(result['name']).to eq('Bran')
-        expect(result['role']).to eq('Bartender')
-        expect(result['description']).to eq('A weathered bartender with kind eyes')
-        expect(result['personality']).to be_nil
-        expect(result['quest_hooks']).to be_nil
-      end
-    end
+  test "merges matching conditional fragments with one overlay" do
+    campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled"])
+    result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-    context 'with one matching overlay' do
-      let(:campaign) { Campaign.create!(name: 'Test', active_overlays: ['recently-bubbled']) }
+    assert_equal "Bran", result["name"]
+    assert_equal "Skeptical of outsiders", result["personality"]
+    assert_equal ["magical-mace"], result["items"]
+    assert_nil result["quest_hooks"]
+  end
 
-      it 'merges matching conditional fragments' do
-        result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+  test "merges all matching fragments with multiple overlays" do
+    campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled", "elemental-maelstorm"])
+    result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-        expect(result['name']).to eq('Bran')
-        expect(result['personality']).to eq('Skeptical of outsiders')
-        expect(result['items']).to eq(['magical-mace'])
-        expect(result['quest_hooks']).to be_nil
-      end
-    end
+    assert_equal "Bran", result["name"]
+    assert_equal "Skeptical of outsiders", result["personality"]
+    assert_equal ["magical-mace"], result["items"]
+    assert_equal "A weathered bartender with kind eyes and a burn scar on his left cheek", result["description"]
+    assert_equal ["recover-roof-materials"], result["quest_hooks"]
+  end
 
-    context 'with multiple matching overlays' do
-      let(:campaign) { Campaign.create!(name: 'Test', active_overlays: ['recently-bubbled', 'elemental-maelstorm']) }
+  test "does not merge non-matching fragments" do
+    campaign = Campaign.create!(name: "Test", active_overlays: ["100-years-bubbled"])
+    result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-      it 'merges all matching fragments' do
-        result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+    assert_equal "Bran", result["name"]
+    assert_nil result["personality"]
+    assert_nil result["items"]
+  end
 
-        expect(result['name']).to eq('Bran')
-        expect(result['personality']).to eq('Skeptical of outsiders')
-        expect(result['items']).to eq(['magical-mace'])
-        expect(result['description']).to eq('A weathered bartender with kind eyes and a burn scar on his left cheek')
-        expect(result['quest_hooks']).to eq(['recover-roof-materials'])
-      end
-    end
-
-    context 'with non-matching overlay' do
-      let(:campaign) { Campaign.create!(name: 'Test', active_overlays: ['100-years-bubbled']) }
-
-      it 'does not merge non-matching fragments' do
-        result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
-
-        expect(result['name']).to eq('Bran')
-        expect(result['personality']).to be_nil
-        expect(result['items']).to be_nil
-      end
-    end
-
-    context 'with missing entity' do
-      let(:campaign) { Campaign.create!(name: 'Test', active_overlays: []) }
-
-      it 'returns nil' do
-        result = EntityResolver.resolve(entity_id: 'npc-missing', campaign: campaign)
-        expect(result).to be_nil
-      end
-    end
+  test "returns nil for missing entity" do
+    campaign = Campaign.create!(name: "Test", active_overlays: [])
+    result = EntityResolver.resolve(entity_id: "npc-missing", campaign: campaign)
+    assert_nil result
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb`
+Run: `bin/rails test test/services/entity_resolver_test.rb`
 Expected: FAIL with "uninitialized constant EntityResolver"
 
 **Step 3: Write minimal implementation**
@@ -984,10 +955,10 @@ class EntityResolver
 
     # Merge matching conditional fragments
     entity.conditional_fragments.each do |fragment|
-      required = fragment['required_overlays'] || []
+      required = fragment["required_overlays"] || []
       next unless required.all? { |overlay| campaign.active_overlays.include?(overlay) }
 
-      resolved.deep_merge!(fragment['data'] || {})
+      resolved.deep_merge!(fragment["data"] || {})
     end
 
     resolved
@@ -997,13 +968,13 @@ end
 
 **Step 4: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb`
+Run: `bin/rails test test/services/entity_resolver_test.rb`
 Expected: All tests PASS
 
 **Step 5: Commit**
 
 ```bash
-git add app/services/entity_resolver.rb spec/services/entity_resolver_spec.rb
+git add app/services/entity_resolver.rb test/services/entity_resolver_test.rb
 git commit -m "feat: add EntityResolver service for overlay resolution"
 ```
 
@@ -1011,35 +982,26 @@ git commit -m "feat: add EntityResolver service for overlay resolution"
 
 **Files:**
 - Modify: `app/services/entity_resolver.rb`
-- Modify: `spec/services/entity_resolver_spec.rb`
+- Modify: `test/services/entity_resolver_test.rb`
 
 **Context:** This project has complex multi-layer data resolution. Debug logging is fundamental for understanding why entities resolve the way they do. Logs should be developer-friendly: explain WHY decisions happen, not just WHAT.
 
 **Step 1: Write test for logging behavior**
 
 ```ruby
-# spec/services/entity_resolver_spec.rb (add this describe block at the end)
-describe 'debug logging' do
-  let(:campaign) { Campaign.create!(name: 'Test', active_overlays: ['recently-bubbled', 'elemental-maelstorm']) }
+# test/services/entity_resolver_test.rb (add this test)
+test "logs resolution steps at debug level" do
+  campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled", "elemental-maelstorm"])
 
-  it 'logs resolution steps at debug level' do
-    allow(Rails.logger).to receive(:debug)
+  Rails.logger.expects(:debug).at_least(6)
 
-    EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
-
-    expect(Rails.logger).to have_received(:debug).with(/Starting resolution for entity_id=npc-bran/)
-    expect(Rails.logger).to have_received(:debug).with(/Found entity: name=Bran/)
-    expect(Rails.logger).to have_received(:debug).with(/Active overlays: \["recently-bubbled", "elemental-maelstorm"\]/)
-    expect(Rails.logger).to have_received(:debug).with(/Fragment matched: required=\["recently-bubbled"\]/)
-    expect(Rails.logger).to have_received(:debug).with(/Fragment matched: required=\["elemental-maelstorm"\]/)
-    expect(Rails.logger).to have_received(:debug).with(/Resolution complete/)
-  end
+  EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb -e "debug logging"`
+Run: `bin/rails test test/services/entity_resolver_test.rb -n test_logs_resolution_steps_at_debug_level`
 Expected: FAIL - no logging calls
 
 **Step 3: Add logging to EntityResolver**
@@ -1066,11 +1028,11 @@ class EntityResolver
     # Merge matching conditional fragments
     matched_count = 0
     entity.conditional_fragments.each_with_index do |fragment, idx|
-      required = fragment['required_overlays'] || []
+      required = fragment["required_overlays"] || []
 
       if required.all? { |overlay| campaign.active_overlays.include?(overlay) }
-        Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment['data']&.keys.inspect}"
-        resolved.deep_merge!(fragment['data'] || {})
+        Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment["data"]&.keys.inspect}"
+        resolved.deep_merge!(fragment["data"] || {})
         matched_count += 1
       else
         Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (not all active)"
@@ -1087,28 +1049,28 @@ end
 
 **Step 4: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb -e "debug logging"`
+Run: `bin/rails test test/services/entity_resolver_test.rb -n test_logs_resolution_steps_at_debug_level`
 Expected: All tests PASS
 
 **Step 5: Manual verification**
 
 Run: `bin/rails console`
 ```ruby
-campaign = Campaign.create!(name: 'Test', active_overlays: ['recently-bubbled'])
-EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled"])
+EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 ```
 
 Check console output - should see debug logs explaining the resolution process.
 
 **Step 6: Run full spec to ensure nothing broke**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb`
+Run: `bin/rails test test/services/entity_resolver_test.rb`
 Expected: All tests PASS
 
 **Step 7: Commit**
 
 ```bash
-git add app/services/entity_resolver.rb spec/services/entity_resolver_spec.rb
+git add app/services/entity_resolver.rb test/services/entity_resolver_test.rb
 git commit -m "feat: add debug logging to EntityResolver for troubleshooting"
 ```
 
@@ -1117,56 +1079,54 @@ git commit -m "feat: add debug logging to EntityResolver for troubleshooting"
 **Files:**
 - Modify: `app/controllers/entities_controller.rb`
 - Modify: `app/views/entities/show.html.erb`
-- Modify: `spec/requests/entities_spec.rb`
+- Modify: `test/controllers/entities_controller_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/requests/entities_spec.rb (replace existing tests)
-require 'rails_helper'
+# test/controllers/entities_controller_test.rb (replace existing tests)
+require "test_helper"
 
-RSpec.describe "Entities", type: :request do
-  let!(:bran) do
-    BaseEntity.create!(
-      entity_id: 'npc-bran',
-      entity_type: 'npc',
-      name: 'Bran',
+class EntitiesControllerTest < ActionDispatch::IntegrationTest
+  def setup
+    @bran = BaseEntity.create!(
+      entity_id: "npc-bran",
+      entity_type: "npc",
+      name: "Bran",
       core_data: {
-        'name' => 'Bran',
-        'role' => 'Bartender',
-        'description' => 'A weathered bartender'
+        "name" => "Bran",
+        "role" => "Bartender",
+        "description" => "A weathered bartender"
       },
       conditional_fragments: [
         {
-          'required_overlays' => ['recently-bubbled'],
-          'data' => { 'personality' => 'Skeptical of outsiders' }
+          "required_overlays" => ["recently-bubbled"],
+          "data" => { "personality" => "Skeptical of outsiders" }
         }
       ]
     )
   end
 
-  describe "GET /campaigns/:campaign_id/entities/:entity_id" do
-    let(:campaign) { Campaign.create!(name: 'Test Campaign', active_overlays: ['recently-bubbled']) }
+  test "displays resolved entity data based on campaign overlays" do
+    campaign = Campaign.create!(name: "Test Campaign", active_overlays: ["recently-bubbled"])
+    get "/campaigns/#{campaign.id}/entities/npc-bran"
 
-    it "displays resolved entity data based on campaign overlays" do
-      get "/campaigns/#{campaign.id}/entities/npc-bran"
+    assert_response :success
+    assert_select "body", /Bran/
+    assert_select "body", /Skeptical of outsiders/
+  end
 
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('Bran')
-      expect(response.body).to include('Skeptical of outsiders')
-    end
-
-    it "returns 404 for missing entity" do
-      get "/campaigns/#{campaign.id}/entities/npc-missing"
-      expect(response).to have_http_status(:not_found)
-    end
+  test "returns 404 for missing entity" do
+    campaign = Campaign.create!(name: "Test Campaign", active_overlays: [])
+    get "/campaigns/#{campaign.id}/entities/npc-missing"
+    assert_response :not_found
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/requests/entities_spec.rb`
+Run: `bin/rails test test/controllers/entities_controller_test.rb`
 Expected: FAIL with "No route matches"
 
 **Step 3: Update route**
@@ -1214,34 +1174,34 @@ end
     <a href="<%= campaign_path(@campaign) %>" class="text-blue-600 hover:underline">&larr; Back to <%= @campaign.name %></a>
   </div>
 
-  <h1 class="text-3xl font-bold mb-4"><%= @resolved_data['name'] %></h1>
+  <h1 class="text-3xl font-bold mb-4"><%= @resolved_data["name"] %></h1>
 
   <div class="bg-white shadow rounded-lg p-6">
     <dl class="space-y-2">
       <% @resolved_data.each do |key, value| %>
         <div>
           <dt class="font-semibold text-gray-700"><%= key.titleize %>:</dt>
-          <dd class="text-gray-900"><%= value.is_a?(Array) ? value.join(', ') : value %></dd>
+          <dd class="text-gray-900"><%= value.is_a?(Array) ? value.join(", ") : value %></dd>
         </div>
       <% end %>
     </dl>
   </div>
 
   <div class="mt-6 text-sm text-gray-500">
-    <p>Active overlays: <%= @campaign.active_overlays.join(', ').presence || 'None' %></p>
+    <p>Active overlays: <%= @campaign.active_overlays.join(", ").presence || "None" %></p>
   </div>
 </div>
 ```
 
 **Step 6: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/requests/entities_spec.rb`
+Run: `bin/rails test test/controllers/entities_controller_test.rb`
 Expected: All tests PASS
 
 **Step 7: Commit**
 
 ```bash
-git add app/controllers/entities_controller.rb app/views/entities/show.html.erb spec/requests/entities_spec.rb config/routes.rb
+git add app/controllers/entities_controller.rb app/views/entities/show.html.erb test/controllers/entities_controller_test.rb config/routes.rb
 git commit -m "feat: update entities controller to use campaign-based resolution"
 ```
 
@@ -1253,72 +1213,66 @@ git commit -m "feat: update entities controller to use campaign-based resolution
 - Create: `app/views/campaigns/show.html.erb`
 - Create: `app/views/campaigns/new.html.erb`
 - Create: `app/views/campaigns/_form.html.erb`
-- Create: `spec/requests/campaigns_spec.rb`
+- Create: `test/controllers/campaigns_controller_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/requests/campaigns_spec.rb
-require 'rails_helper'
+# test/controllers/campaigns_controller_test.rb
+require "test_helper"
 
-RSpec.describe "Campaigns", type: :request do
-  before do
+class CampaignsControllerTest < ActionDispatch::IntegrationTest
+  def setup
     Overlay.create!([
-      { overlay_id: 'recently-bubbled', name: 'Recently Bubbled', overlay_type: 'major', mutually_exclusive_with: ['100-years-bubbled'] },
-      { overlay_id: 'elemental-maelstorm', name: 'Elemental Maelstorm', overlay_type: 'flavor', mutually_exclusive_with: [] }
+      { overlay_id: "recently-bubbled", name: "Recently Bubbled", overlay_type: "major", mutually_exclusive_with: ["100-years-bubbled"] },
+      { overlay_id: "elemental-maelstorm", name: "Elemental Maelstorm", overlay_type: "flavor", mutually_exclusive_with: [] }
     ])
   end
 
-  describe "GET /campaigns" do
-    it "lists all campaigns" do
-      Campaign.create!(name: 'Test Campaign', active_overlays: [])
+  test "lists all campaigns" do
+    Campaign.create!(name: "Test Campaign", active_overlays: [])
 
-      get "/campaigns"
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('Test Campaign')
-    end
+    get "/campaigns"
+    assert_response :success
+    assert_select "body", /Test Campaign/
   end
 
-  describe "GET /campaigns/new" do
-    it "shows campaign creation form" do
-      get "/campaigns/new"
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('New Campaign')
-    end
+  test "shows campaign creation form" do
+    get "/campaigns/new"
+    assert_response :success
+    assert_select "body", /New Campaign/
   end
 
-  describe "POST /campaigns" do
-    it "creates a campaign with selected overlays" do
-      expect {
-        post "/campaigns", params: {
-          campaign: {
-            name: 'My Campaign',
-            active_overlays: ['recently-bubbled', 'elemental-maelstorm']
-          }
-        }
-      }.to change { Campaign.count }.by(1)
-
-      campaign = Campaign.last
-      expect(campaign.name).to eq('My Campaign')
-      expect(campaign.active_overlays).to contain_exactly('recently-bubbled', 'elemental-maelstorm')
-    end
-
-    it "rejects mutually exclusive overlays" do
+  test "creates a campaign with selected overlays" do
+    assert_difference "Campaign.count", 1 do
       post "/campaigns", params: {
         campaign: {
-          name: 'Bad Campaign',
-          active_overlays: ['recently-bubbled', '100-years-bubbled']
+          name: "My Campaign",
+          active_overlays: ["recently-bubbled", "elemental-maelstorm"]
         }
       }
-      expect(response).to have_http_status(:unprocessable_entity)
     end
+
+    campaign = Campaign.last
+    assert_equal "My Campaign", campaign.name
+    assert_equal ["recently-bubbled", "elemental-maelstorm"], campaign.active_overlays.sort
+  end
+
+  test "rejects mutually exclusive overlays" do
+    post "/campaigns", params: {
+      campaign: {
+        name: "Bad Campaign",
+        active_overlays: ["recently-bubbled", "100-years-bubbled"]
+      }
+    }
+    assert_response :unprocessable_entity
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/requests/campaigns_spec.rb`
+Run: `bin/rails test test/controllers/campaigns_controller_test.rb`
 Expected: FAIL with "missing template campaigns/index"
 
 **Step 3: Create controller**
@@ -1344,7 +1298,7 @@ class CampaignsController < ApplicationController
     @campaign = Campaign.new(campaign_params)
 
     if @campaign.save
-      redirect_to @campaign, notice: 'Campaign created successfully'
+      redirect_to @campaign, notice: "Campaign created successfully"
     else
       @overlays = Overlay.all.group_by(&:overlay_type)
       render :new, status: :unprocessable_entity
@@ -1376,7 +1330,7 @@ end
           <a href="<%= campaign_path(campaign) %>" class="text-blue-600 hover:underline"><%= campaign.name %></a>
         </h2>
         <p class="text-sm text-gray-600">
-          Overlays: <%= campaign.active_overlays.join(', ').presence || 'None' %>
+          Overlays: <%= campaign.active_overlays.join(", ").presence || "None" %>
         </p>
       </div>
     <% end %>
@@ -1431,7 +1385,7 @@ end
 <div class="max-w-2xl mx-auto p-6">
   <h1 class="text-3xl font-bold mb-6">New Campaign</h1>
 
-  <%= render 'form', campaign: @campaign, overlays: @overlays %>
+  <%= render "form", campaign: @campaign, overlays: @overlays %>
 </div>
 ```
 
@@ -1462,13 +1416,13 @@ end
         <h3 class="font-semibold text-gray-700 mb-2"><%= type.titleize %> Overlays</h3>
         <% type_overlays.each do |overlay| %>
           <div class="flex items-center mb-2">
-            <%= check_box_tag 'campaign[active_overlays][]', overlay.overlay_id,
+            <%= check_box_tag "campaign[active_overlays][]", overlay.overlay_id,
                 campaign.active_overlays.include?(overlay.overlay_id),
                 id: "overlay_#{overlay.overlay_id}",
                 class: "mr-2" %>
             <%= label_tag "overlay_#{overlay.overlay_id}", overlay.name %>
             <% if overlay.mutually_exclusive_with.any? %>
-              <span class="ml-2 text-xs text-gray-500">(exclusive with: <%= overlay.mutually_exclusive_with.join(', ') %>)</span>
+              <span class="ml-2 text-xs text-gray-500">(exclusive with: <%= overlay.mutually_exclusive_with.join(", ") %>)</span>
             <% end %>
           </div>
         <% end %>
@@ -1482,7 +1436,7 @@ end
 
 **Step 5: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/requests/campaigns_spec.rb`
+Run: `bin/rails test test/controllers/campaigns_controller_test.rb`
 Expected: All tests PASS
 
 **Step 6: Manual test**
@@ -1497,7 +1451,7 @@ Visit: `http://localhost:3000/campaigns`
 **Step 7: Commit**
 
 ```bash
-git add app/controllers/campaigns_controller.rb app/views/campaigns/ spec/requests/campaigns_spec.rb
+git add app/controllers/campaigns_controller.rb app/views/campaigns/ test/controllers/campaigns_controller_test.rb
 git commit -m "feat: add campaigns CRUD with overlay selection"
 ```
 
@@ -1568,14 +1522,14 @@ stats = "dm_only"
 def self.import_file(file_path)
   data = TomlRB.load_file(file_path)
 
-  BaseEntity.find_or_initialize_by(entity_id: data['entity_id']).tap do |entity|
-    entity.entity_type = data['entity_type']
-    entity.name = data['name']
-    entity.core_data = data['core_data'] || {}
-    entity.conditional_fragments = data['conditional_fragments'] || []
-    entity.visibility_rules = data['visibility_rules'] || {}
-    entity.replaces = data['replaces']
-    entity.show_when = data['show_when'] || []
+  BaseEntity.find_or_initialize_by(entity_id: data["entity_id"]).tap do |entity|
+    entity.entity_type = data["entity_type"]
+    entity.name = data["name"]
+    entity.core_data = data["core_data"] || {}
+    entity.conditional_fragments = data["conditional_fragments"] || []
+    entity.visibility_rules = data["visibility_rules"] || {}
+    entity.replaces = data["replaces"]
+    entity.show_when = data["show_when"] || []
     entity.save!
   end
 end
@@ -1597,62 +1551,79 @@ git commit -m "feat: add replacement fields to BaseEntity"
 
 **Files:**
 - Modify: `app/services/entity_resolver.rb`
-- Modify: `spec/services/entity_resolver_spec.rb`
+- Modify: `test/services/entity_resolver_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/services/entity_resolver_spec.rb (add this context)
-describe 'entity replacement' do
-  let!(:elena) do
-    BaseEntity.create!(
-      entity_id: 'npc-elena',
-      entity_type: 'npc',
-      name: 'Elena',
-      replaces: 'npc-bran',
-      show_when: ['100-years-bubbled'],
-      core_data: {
-        'name' => 'Elena',
-        'role' => 'Bartender',
-        'description' => "Bran's granddaughter, young and energetic"
-      }
-    )
-  end
+# test/services/entity_resolver_test.rb (add these tests)
+test "returns replacement entity when show_when conditions are met" do
+  elena = BaseEntity.create!(
+    entity_id: "npc-elena",
+    entity_type: "npc",
+    name: "Elena",
+    replaces: "npc-bran",
+    show_when: ["100-years-bubbled"],
+    core_data: {
+      "name" => "Elena",
+      "role" => "Bartender",
+      "description" => "Bran's granddaughter, young and energetic"
+    }
+  )
 
-  context 'when replacement entity show_when conditions are met' do
-    let(:campaign) { Campaign.create!(name: 'Test', active_overlays: ['100-years-bubbled']) }
+  campaign = Campaign.create!(name: "Test", active_overlays: ["100-years-bubbled"])
+  result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-    it 'returns replacement entity instead of original' do
-      result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+  assert_equal "Elena", result["name"]
+  assert_equal "Bran's granddaughter, young and energetic", result["description"]
+end
 
-      expect(result['name']).to eq('Elena')
-      expect(result['description']).to eq("Bran's granddaughter, young and energetic")
-    end
+test "does not merge original fragments when replacement is active" do
+  elena = BaseEntity.create!(
+    entity_id: "npc-elena",
+    entity_type: "npc",
+    name: "Elena",
+    replaces: "npc-bran",
+    show_when: ["100-years-bubbled"],
+    core_data: {
+      "name" => "Elena",
+      "role" => "Bartender",
+      "description" => "Bran's granddaughter, young and energetic"
+    }
+  )
 
-    it 'does not merge original fragments' do
-      result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+  campaign = Campaign.create!(name: "Test", active_overlays: ["100-years-bubbled"])
+  result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-      expect(result['personality']).to be_nil
-      expect(result['items']).to be_nil
-    end
-  end
+  assert_nil result["personality"]
+  assert_nil result["items"]
+end
 
-  context 'when replacement entity show_when conditions are not met' do
-    let(:campaign) { Campaign.create!(name: 'Test', active_overlays: ['recently-bubbled']) }
+test "returns original entity when replacement show_when conditions are not met" do
+  elena = BaseEntity.create!(
+    entity_id: "npc-elena",
+    entity_type: "npc",
+    name: "Elena",
+    replaces: "npc-bran",
+    show_when: ["100-years-bubbled"],
+    core_data: {
+      "name" => "Elena",
+      "role" => "Bartender",
+      "description" => "Bran's granddaughter, young and energetic"
+    }
+  )
 
-    it 'returns original entity' do
-      result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+  campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled"])
+  result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-      expect(result['name']).to eq('Bran')
-      expect(result['personality']).to eq('Skeptical of outsiders')
-    end
-  end
+  assert_equal "Bran", result["name"]
+  assert_equal "Skeptical of outsiders", result["personality"]
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb`
+Run: `bin/rails test test/services/entity_resolver_test.rb`
 Expected: FAIL - returns Bran instead of Elena
 
 **Step 3: Update EntityResolver**
@@ -1694,11 +1665,11 @@ class EntityResolver
     else
       matched_count = 0
       entity.conditional_fragments.each_with_index do |fragment, idx|
-        required = fragment['required_overlays'] || []
+        required = fragment["required_overlays"] || []
 
         if required.all? { |overlay| campaign.active_overlays.include?(overlay) }
-          Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment['data']&.keys.inspect}"
-          resolved.deep_merge!(fragment['data'] || {})
+          Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment["data"]&.keys.inspect}"
+          resolved.deep_merge!(fragment["data"] || {})
           matched_count += 1
         else
           Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (not all active)"
@@ -1724,13 +1695,13 @@ end
 
 **Step 4: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb`
+Run: `bin/rails test test/services/entity_resolver_test.rb`
 Expected: All tests PASS
 
 **Step 5: Commit**
 
 ```bash
-git add app/services/entity_resolver.rb spec/services/entity_resolver_spec.rb
+git add app/services/entity_resolver.rb test/services/entity_resolver_test.rb
 git commit -m "feat: add entity replacement logic to EntityResolver"
 ```
 
@@ -1743,84 +1714,86 @@ git commit -m "feat: add entity replacement logic to EntityResolver"
 **Files:**
 - Create: `app/models/dm_override.rb`
 - Create: `db/migrate/XXXXXX_create_dm_overrides.rb`
-- Create: `spec/models/dm_override_spec.rb`
+- Create: `test/models/dm_override_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/models/dm_override_spec.rb
-require 'rails_helper'
+# test/models/dm_override_test.rb
+require "test_helper"
 
-RSpec.describe DmOverride, type: :model do
-  let(:campaign) { Campaign.create!(name: 'Test', active_overlays: []) }
-  let(:entity) { BaseEntity.create!(entity_id: 'npc-bran', entity_type: 'npc', name: 'Bran', core_data: {}) }
+class DmOverrideTest < ActiveSupport::TestCase
+  def setup
+    @campaign = Campaign.create!(name: "Test", active_overlays: [])
+    @entity = BaseEntity.create!(entity_id: "npc-bran", entity_type: "npc", name: "Bran", core_data: {})
+  end
 
-  describe 'validations' do
-    it 'requires campaign' do
-      override = DmOverride.new(base_entity: entity, override_type: 'edit', override_data: {})
-      expect(override).not_to be_valid
-    end
+  test "requires campaign" do
+    override = DmOverride.new(base_entity: @entity, override_type: "edit", override_data: {})
+    assert_not override.valid?
+    assert_includes override.errors[:campaign], "must exist"
+  end
 
-    it 'requires base_entity' do
-      override = DmOverride.new(campaign: campaign, override_type: 'edit', override_data: {})
-      expect(override).not_to be_valid
-    end
+  test "requires base_entity" do
+    override = DmOverride.new(campaign: @campaign, override_type: "edit", override_data: {})
+    assert_not override.valid?
+    assert_includes override.errors[:base_entity], "must exist"
+  end
 
-    it 'requires override_type' do
-      override = DmOverride.new(campaign: campaign, base_entity: entity, override_data: {})
-      expect(override).not_to be_valid
-    end
+  test "requires override_type" do
+    override = DmOverride.new(campaign: @campaign, base_entity: @entity, override_data: {})
+    assert_not override.valid?
+    assert_includes override.errors[:override_type], "can't be blank"
+  end
 
-    it 'validates override_type is disable, edit, or replace' do
+  test "validates override_type is disable, edit, or replace" do
+    override = DmOverride.new(
+      campaign: @campaign,
+      base_entity: @entity,
+      override_type: "invalid",
+      override_data: {}
+    )
+    assert_not override.valid?
+    assert_includes override.errors[:override_type], "is not included in the list"
+  end
+
+  test "allows valid override_types" do
+    %w[disable edit replace].each do |type|
       override = DmOverride.new(
-        campaign: campaign,
-        base_entity: entity,
-        override_type: 'invalid',
+        campaign: @campaign,
+        base_entity: @entity,
+        override_type: type,
         override_data: {}
       )
-      expect(override).not_to be_valid
-    end
-
-    it 'allows valid override_types' do
-      %w[disable edit replace].each do |type|
-        override = DmOverride.new(
-          campaign: campaign,
-          base_entity: entity,
-          override_type: type,
-          override_data: {}
-        )
-        expect(override).to be_valid
-      end
+      assert override.valid?
     end
   end
 
-  describe 'associations' do
-    it 'belongs to campaign' do
-      override = DmOverride.create!(
-        campaign: campaign,
-        base_entity: entity,
-        override_type: 'edit',
-        override_data: {}
-      )
-      expect(override.campaign).to eq(campaign)
-    end
+  test "belongs to campaign" do
+    override = DmOverride.create!(
+      campaign: @campaign,
+      base_entity: @entity,
+      override_type: "edit",
+      override_data: {}
+    )
+    assert_equal @campaign, override.campaign
+  end
 
-    it 'belongs to base_entity' do
-      override = DmOverride.create!(
-        campaign: campaign,
-        base_entity: entity,
-        override_type: 'edit',
-        override_data: {}
-      )
-      expect(override.base_entity).to eq(entity)
-    end
+  test "belongs to base_entity" do
+    override = DmOverride.create!(
+      campaign: @campaign,
+      base_entity: @entity,
+      override_type: "edit",
+      override_data: {}
+    )
+    assert_equal @entity, override.base_entity
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/models/dm_override_spec.rb`
+Run: `bin/rails test test/models/dm_override_test.rb`
 Expected: FAIL with "uninitialized constant DmOverride"
 
 **Step 3: Create migration**
@@ -1875,13 +1848,13 @@ has_many :dm_overrides, dependent: :destroy
 
 **Step 7: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/models/dm_override_spec.rb`
+Run: `bin/rails test test/models/dm_override_test.rb`
 Expected: All tests PASS
 
 **Step 8: Commit**
 
 ```bash
-git add app/models/dm_override.rb app/models/campaign.rb db/migrate/ spec/models/dm_override_spec.rb db/schema.rb
+git add app/models/dm_override.rb app/models/campaign.rb db/migrate/ test/models/dm_override_test.rb db/schema.rb
 git commit -m "feat: add DmOverride model"
 ```
 
@@ -1889,83 +1862,70 @@ git commit -m "feat: add DmOverride model"
 
 **Files:**
 - Modify: `app/services/entity_resolver.rb`
-- Modify: `spec/services/entity_resolver_spec.rb`
+- Modify: `test/services/entity_resolver_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/services/entity_resolver_spec.rb (add this describe block)
-describe 'DM overrides' do
-  let(:campaign) { Campaign.create!(name: 'Test', active_overlays: ['recently-bubbled']) }
+# test/services/entity_resolver_test.rb (add these tests)
+test "returns nil for disabled entity" do
+  campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled"])
+  DmOverride.create!(
+    campaign: campaign,
+    base_entity: @bran,
+    override_type: "disable",
+    override_data: {}
+  )
 
-  context 'with disable override' do
-    before do
-      DmOverride.create!(
-        campaign: campaign,
-        base_entity: bran,
-        override_type: 'disable',
-        override_data: {}
-      )
-    end
+  result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
+  assert_nil result
+end
 
-    it 'returns nil for disabled entity' do
-      result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
-      expect(result).to be_nil
-    end
-  end
+test "merges override data over resolved base with edit override" do
+  campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled"])
+  DmOverride.create!(
+    campaign: campaign,
+    base_entity: @bran,
+    override_type: "edit",
+    override_data: {
+      "description" => "A friendly bartender (DM customized)",
+      "custom_note" => "Added by DM"
+    }
+  )
 
-  context 'with edit override' do
-    before do
-      DmOverride.create!(
-        campaign: campaign,
-        base_entity: bran,
-        override_type: 'edit',
-        override_data: {
-          'description' => 'A friendly bartender (DM customized)',
-          'custom_note' => 'Added by DM'
-        }
-      )
-    end
+  result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-    it 'merges override data over resolved base' do
-      result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
+  assert_equal "Bran", result["name"]
+  assert_equal "Skeptical of outsiders", result["personality"]
+  assert_equal "A friendly bartender (DM customized)", result["description"]
+  assert_equal "Added by DM", result["custom_note"]
+end
 
-      expect(result['name']).to eq('Bran')
-      expect(result['personality']).to eq('Skeptical of outsiders')
-      expect(result['description']).to eq('A friendly bartender (DM customized)')
-      expect(result['custom_note']).to eq('Added by DM')
-    end
-  end
+test "uses override data entirely with replace override" do
+  campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled"])
+  DmOverride.create!(
+    campaign: campaign,
+    base_entity: @bran,
+    override_type: "replace",
+    override_data: {
+      "name" => "Brandon",
+      "role" => "Innkeeper",
+      "description" => "Completely different person"
+    }
+  )
 
-  context 'with replace override' do
-    before do
-      DmOverride.create!(
-        campaign: campaign,
-        base_entity: bran,
-        override_type: 'replace',
-        override_data: {
-          'name' => 'Brandon',
-          'role' => 'Innkeeper',
-          'description' => 'Completely different person'
-        }
-      )
-    end
+  result = EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
 
-    it 'uses override data entirely, ignoring base and fragments' do
-      result = EntityResolver.resolve(entity_id: 'npc-bran', campaign: campaign)
-
-      expect(result['name']).to eq('Brandon')
-      expect(result['role']).to eq('Innkeeper')
-      expect(result['description']).to eq('Completely different person')
-      expect(result['personality']).to be_nil
-    end
-  end
+  assert_equal "Brandon", result["name"]
+  assert_equal "Innkeeper", result["role"]
+  assert_equal "Completely different person", result["description"]
+  assert_nil result["personality"]
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb`
+Run: `bin/rails test test/services/entity_resolver_test.rb`
 Expected: FAIL - overrides not applied
 
 **Step 3: Update EntityResolver**
@@ -1991,13 +1951,13 @@ class EntityResolver
       Rails.logger.debug "EntityResolver: DM override found - type=#{override.override_type}"
 
       # Disable override returns nil immediately
-      if override.override_type == 'disable'
+      if override.override_type == "disable"
         Rails.logger.debug "EntityResolver: Entity disabled by DM - returning nil"
         return nil
       end
 
       # Replace override returns override_data only
-      if override.override_type == 'replace'
+      if override.override_type == "replace"
         Rails.logger.debug "EntityResolver: Entity fully replaced by DM - returning override_data (keys=#{override.override_data.keys.inspect})"
         return override.override_data.deep_dup
       end
@@ -2027,11 +1987,11 @@ class EntityResolver
     else
       matched_count = 0
       entity.conditional_fragments.each_with_index do |fragment, idx|
-        required = fragment['required_overlays'] || []
+        required = fragment["required_overlays"] || []
 
         if required.all? { |overlay| campaign.active_overlays.include?(overlay) }
-          Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment['data']&.keys.inspect}"
-          resolved.deep_merge!(fragment['data'] || {})
+          Rails.logger.debug "EntityResolver: Fragment #{idx} matched: required=#{required.inspect}, data_keys=#{fragment["data"]&.keys.inspect}"
+          resolved.deep_merge!(fragment["data"] || {})
           matched_count += 1
         else
           Rails.logger.debug "EntityResolver: Fragment #{idx} skipped: required=#{required.inspect} (not all active)"
@@ -2042,7 +2002,7 @@ class EntityResolver
     end
 
     # Apply edit override if present
-    if override&.override_type == 'edit'
+    if override&.override_type == "edit"
       Rails.logger.debug "EntityResolver: Applying DM edit override - merging keys: #{override.override_data.keys.inspect}"
       resolved.deep_merge!(override.override_data)
     end
@@ -2063,13 +2023,13 @@ end
 
 **Step 4: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/services/entity_resolver_spec.rb`
+Run: `bin/rails test test/services/entity_resolver_test.rb`
 Expected: All tests PASS
 
 **Step 5: Commit**
 
 ```bash
-git add app/services/entity_resolver.rb spec/services/entity_resolver_spec.rb
+git add app/services/entity_resolver.rb test/services/entity_resolver_test.rb
 git commit -m "feat: add DM override support to EntityResolver"
 ```
 
@@ -2081,81 +2041,70 @@ git commit -m "feat: add DM override support to EntityResolver"
 
 **Files:**
 - Create: `app/services/visibility_filter.rb`
-- Create: `spec/services/visibility_filter_spec.rb`
+- Create: `test/services/visibility_filter_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/services/visibility_filter_spec.rb
-require 'rails_helper'
+# test/services/visibility_filter_test.rb
+require "test_helper"
 
-RSpec.describe VisibilityFilter do
-  let(:resolved_data) do
-    {
-      'name' => 'Bran',
-      'role' => 'Bartender',
-      'description' => 'A weathered bartender',
-      'personality' => 'Skeptical of outsiders',
-      'stats' => { 'ac' => 10, 'hp' => 8 },
-      'quest_hooks' => ['recover-roof-materials']
+class VisibilityFilterTest < ActiveSupport::TestCase
+  def setup
+    @resolved_data = {
+      "name" => "Bran",
+      "role" => "Bartender",
+      "description" => "A weathered bartender",
+      "personality" => "Skeptical of outsiders",
+      "stats" => { "ac" => 10, "hp" => 8 },
+      "quest_hooks" => ["recover-roof-materials"]
+    }
+
+    @visibility_rules = {
+      "name" => "public_when_discovered",
+      "role" => "public_when_discovered",
+      "description" => "public_when_discovered",
+      "personality" => "dm_controlled",
+      "stats" => "dm_only",
+      "quest_hooks" => "dm_only"
     }
   end
 
-  let(:visibility_rules) do
-    {
-      'name' => 'public_when_discovered',
-      'role' => 'public_when_discovered',
-      'description' => 'public_when_discovered',
-      'personality' => 'dm_controlled',
-      'stats' => 'dm_only',
-      'quest_hooks' => 'dm_only'
-    }
+  test "returns all fields for DM" do
+    result = VisibilityFilter.filter(@resolved_data, @visibility_rules, viewer_role: :dm)
+    assert_equal @resolved_data.keys.sort, result.keys.sort
   end
 
-  describe '.filter' do
-    context 'as DM' do
-      it 'returns all fields' do
-        result = VisibilityFilter.filter(resolved_data, visibility_rules, viewer_role: :dm)
+  test "returns only public_when_discovered and dm_controlled fields for player" do
+    result = VisibilityFilter.filter(@resolved_data, @visibility_rules, viewer_role: :player)
 
-        expect(result.keys).to contain_exactly('name', 'role', 'description', 'personality', 'stats', 'quest_hooks')
-      end
-    end
+    assert_equal ["name", "role", "description", "personality"].sort, result.keys.sort
+    assert_nil result["stats"]
+    assert_nil result["quest_hooks"]
+  end
 
-    context 'as player' do
-      it 'returns only public_when_discovered and dm_controlled fields' do
-        result = VisibilityFilter.filter(resolved_data, visibility_rules, viewer_role: :player)
+  test "hides fields without visibility rules from player" do
+    data_with_extra = @resolved_data.merge("secret_field" => "hidden")
+    result = VisibilityFilter.filter(data_with_extra, @visibility_rules, viewer_role: :player)
 
-        expect(result.keys).to contain_exactly('name', 'role', 'description', 'personality')
-        expect(result['stats']).to be_nil
-        expect(result['quest_hooks']).to be_nil
-      end
+    assert_nil result["secret_field"]
+  end
 
-      it 'hides fields without visibility rules' do
-        data_with_extra = resolved_data.merge('secret_field' => 'hidden')
-        result = VisibilityFilter.filter(data_with_extra, visibility_rules, viewer_role: :player)
+  test "shows all fields to DM with nil visibility_rules" do
+    result = VisibilityFilter.filter(@resolved_data, {}, viewer_role: :dm)
+    assert_equal @resolved_data.keys, result.keys
+  end
 
-        expect(result['secret_field']).to be_nil
-      end
-    end
-
-    context 'with nil visibility_rules' do
-      it 'shows all fields to DM' do
-        result = VisibilityFilter.filter(resolved_data, {}, viewer_role: :dm)
-        expect(result.keys).to eq(resolved_data.keys)
-      end
-
-      it 'hides all fields from player' do
-        result = VisibilityFilter.filter(resolved_data, {}, viewer_role: :player)
-        expect(result).to eq({})
-      end
-    end
+  test "hides all fields from player with nil visibility_rules" do
+    result = VisibilityFilter.filter(@resolved_data, {}, viewer_role: :player)
+    assert_equal({}, result)
   end
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/services/visibility_filter_spec.rb`
+Run: `bin/rails test test/services/visibility_filter_test.rb`
 Expected: FAIL with "uninitialized constant VisibilityFilter"
 
 **Step 3: Write implementation**
@@ -2202,13 +2151,13 @@ end
 
 **Step 4: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/services/visibility_filter_spec.rb`
+Run: `bin/rails test test/services/visibility_filter_test.rb`
 Expected: All tests PASS
 
 **Step 5: Commit**
 
 ```bash
-git add app/services/visibility_filter.rb spec/services/visibility_filter_spec.rb
+git add app/services/visibility_filter.rb test/services/visibility_filter_test.rb
 git commit -m "feat: add VisibilityFilter service"
 ```
 
@@ -2216,53 +2165,69 @@ git commit -m "feat: add VisibilityFilter service"
 
 **Files:**
 - Modify: `app/controllers/entities_controller.rb`
-- Modify: `spec/requests/entities_spec.rb`
+- Modify: `test/controllers/entities_controller_test.rb`
 
 **Step 1: Write the failing test**
 
 ```ruby
-# spec/requests/entities_spec.rb (add this describe block)
-describe "visibility filtering" do
-  let(:campaign) { Campaign.create!(name: 'Test', active_overlays: []) }
-  let!(:entity) do
-    BaseEntity.create!(
-      entity_id: 'npc-test',
-      entity_type: 'npc',
-      name: 'Test NPC',
-      core_data: {
-        'name' => 'Test NPC',
-        'description' => 'A test character',
-        'stats' => { 'ac' => 10 }
-      },
-      visibility_rules: {
-        'name' => 'public_when_discovered',
-        'description' => 'public_when_discovered',
-        'stats' => 'dm_only'
-      }
-    )
-  end
+# test/controllers/entities_controller_test.rb (add these tests)
+test "shows all fields to DM" do
+  campaign = Campaign.create!(name: "Test", active_overlays: [])
+  entity = BaseEntity.create!(
+    entity_id: "npc-test",
+    entity_type: "npc",
+    name: "Test NPC",
+    core_data: {
+      "name" => "Test NPC",
+      "description" => "A test character",
+      "stats" => { "ac" => 10 }
+    },
+    visibility_rules: {
+      "name" => "public_when_discovered",
+      "description" => "public_when_discovered",
+      "stats" => "dm_only"
+    }
+  )
 
-  it "shows all fields to DM" do
-    get "/campaigns/#{campaign.id}/entities/npc-test?view_as=dm"
+  get "/campaigns/#{campaign.id}/entities/npc-test?view_as=dm"
 
-    expect(response.body).to include('Test NPC')
-    expect(response.body).to include('A test character')
-    expect(response.body).to include('ac')
-  end
+  assert_response :success
+  assert_select "body", /Test NPC/
+  assert_select "body", /A test character/
+  assert_select "body", /ac/
+end
 
-  it "hides dm_only fields from player" do
-    get "/campaigns/#{campaign.id}/entities/npc-test?view_as=player"
+test "hides dm_only fields from player" do
+  campaign = Campaign.create!(name: "Test", active_overlays: [])
+  entity = BaseEntity.create!(
+    entity_id: "npc-test",
+    entity_type: "npc",
+    name: "Test NPC",
+    core_data: {
+      "name" => "Test NPC",
+      "description" => "A test character",
+      "stats" => { "ac" => 10 }
+    },
+    visibility_rules: {
+      "name" => "public_when_discovered",
+      "description" => "public_when_discovered",
+      "stats" => "dm_only"
+    }
+  )
 
-    expect(response.body).to include('Test NPC')
-    expect(response.body).to include('A test character')
-    expect(response.body).not_to include('ac')
-  end
+  get "/campaigns/#{campaign.id}/entities/npc-test?view_as=player"
+
+  assert_response :success
+  assert_select "body", /Test NPC/
+  assert_select "body", /A test character/
+  # Stats should not be in the body
+  assert_select "body", text: /ac/, count: 0
 end
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bundle exec rspec spec/requests/entities_spec.rb`
+Run: `bin/rails test test/controllers/entities_controller_test.rb`
 Expected: FAIL - stats still showing for player
 
 **Step 3: Update controller**
@@ -2299,20 +2264,39 @@ end
 **Step 4: Update view to show viewer role**
 
 ```erb
-<!-- app/views/entities/show.html.erb (add at bottom) -->
-<div class="mt-6 text-sm text-gray-500">
-  <p>Active overlays: <%= @campaign.active_overlays.join(', ').presence || 'None' %></p>
-  <p>Viewing as: <%= @viewer_role.to_s.titleize %></p>
-  <div class="mt-2">
-    <%= link_to "View as DM", campaign_entity_path(@campaign, params[:entity_id], view_as: :dm), class: "text-blue-600 hover:underline mr-4" %>
-    <%= link_to "View as Player", campaign_entity_path(@campaign, params[:entity_id], view_as: :player), class: "text-blue-600 hover:underline" %>
+<!-- app/views/entities/show.html.erb (update bottom section) -->
+<div class="max-w-4xl mx-auto p-6">
+  <div class="mb-4">
+    <a href="<%= campaign_path(@campaign) %>" class="text-blue-600 hover:underline">&larr; Back to <%= @campaign.name %></a>
+  </div>
+
+  <h1 class="text-3xl font-bold mb-4"><%= @resolved_data["name"] %></h1>
+
+  <div class="bg-white shadow rounded-lg p-6">
+    <dl class="space-y-2">
+      <% @resolved_data.each do |key, value| %>
+        <div>
+          <dt class="font-semibold text-gray-700"><%= key.titleize %>:</dt>
+          <dd class="text-gray-900"><%= value.is_a?(Array) ? value.join(", ") : value %></dd>
+        </div>
+      <% end %>
+    </dl>
+  </div>
+
+  <div class="mt-6 text-sm text-gray-500">
+    <p>Active overlays: <%= @campaign.active_overlays.join(", ").presence || "None" %></p>
+    <p>Viewing as: <%= @viewer_role.to_s.titleize %></p>
+    <div class="mt-2">
+      <%= link_to "View as DM", campaign_entity_path(@campaign, params[:entity_id], view_as: :dm), class: "text-blue-600 hover:underline mr-4" %>
+      <%= link_to "View as Player", campaign_entity_path(@campaign, params[:entity_id], view_as: :player), class: "text-blue-600 hover:underline" %>
+    </div>
   </div>
 </div>
 ```
 
 **Step 5: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/requests/entities_spec.rb`
+Run: `bin/rails test test/controllers/entities_controller_test.rb`
 Expected: All tests PASS
 
 **Step 6: Manual verification**
@@ -2324,7 +2308,7 @@ Expected: Stats hidden for player view
 **Step 7: Commit**
 
 ```bash
-git add app/controllers/entities_controller.rb app/views/entities/show.html.erb spec/requests/entities_spec.rb
+git add app/controllers/entities_controller.rb app/views/entities/show.html.erb test/controllers/entities_controller_test.rb
 git commit -m "feat: integrate visibility filtering into entities display"
 ```
 
@@ -2335,82 +2319,83 @@ git commit -m "feat: integrate visibility filtering into entities display"
 ### Task 18: End-to-End Integration Test
 
 **Files:**
-- Create: `spec/integration/overlay_system_spec.rb`
+- Create: `test/integration/overlay_system_test.rb`
 
 **Step 1: Write comprehensive integration test**
 
 ```ruby
-# spec/integration/overlay_system_spec.rb
-require 'rails_helper'
+# test/integration/overlay_system_test.rb
+require "test_helper"
 
-RSpec.describe 'Overlay System Integration', type: :request do
-  before do
+class OverlaySystemTest < ActionDispatch::IntegrationTest
+  def setup
     # Import all playkit data
-    Rake::Task['playkit:import'].execute
+    Rake::Task["playkit:import"].execute
   end
 
-  it 'handles full workflow: campaign creation → overlay selection → entity viewing → DM override' do
+  test "handles full workflow: campaign creation → overlay selection → entity viewing → DM override" do
     # Step 1: Create campaign with overlays
-    post '/campaigns', params: {
+    post "/campaigns", params: {
       campaign: {
-        name: 'Integration Test Campaign',
-        active_overlays: ['recently-bubbled', 'elemental-maelstorm']
+        name: "Integration Test Campaign",
+        active_overlays: ["recently-bubbled", "elemental-maelstorm"]
       }
     }
-    expect(response).to redirect_to(assigns(:campaign))
+    assert_response :redirect
+    follow_redirect!
     campaign = Campaign.last
 
     # Step 2: View entity with overlays active
     get "/campaigns/#{campaign.id}/entities/npc-bran"
-    expect(response).to have_http_status(:ok)
-    expect(response.body).to include('Bran')
-    expect(response.body).to include('Skeptical of outsiders') # from recently-bubbled
-    expect(response.body).to include('burn scar') # from elemental-maelstorm
+    assert_response :success
+    assert_select "body", /Bran/
+    assert_select "body", /Skeptical of outsiders/ # from recently-bubbled
+    assert_select "body", /burn scar/ # from elemental-maelstorm
 
     # Step 3: Create DM override
-    entity = BaseEntity.find_by(entity_id: 'npc-bran')
+    entity = BaseEntity.find_by(entity_id: "npc-bran")
     override = DmOverride.create!(
       campaign: campaign,
       base_entity: entity,
-      override_type: 'edit',
-      override_data: { 'custom_field' => 'DM added this' }
+      override_type: "edit",
+      override_data: { "custom_field" => "DM added this" }
     )
 
     # Step 4: View entity with override
     get "/campaigns/#{campaign.id}/entities/npc-bran"
-    expect(response.body).to include('DM added this')
+    assert_select "body", /DM added this/
 
     # Step 5: View as player (filtered)
     get "/campaigns/#{campaign.id}/entities/npc-bran?view_as=player"
-    expect(response.body).to include('Bran')
-    expect(response.body).not_to include('ac') # stats are dm_only
+    assert_select "body", /Bran/
+    assert_select "body", text: /ac/, count: 0 # stats are dm_only
   end
 
-  it 'handles entity replacement' do
+  test "handles entity replacement" do
     # Create campaign with 100-years-bubbled
     campaign = Campaign.create!(
-      name: 'Replacement Test',
-      active_overlays: ['100-years-bubbled']
+      name: "Replacement Test",
+      active_overlays: ["100-years-bubbled"]
     )
 
     # View npc-bran (should show Elena instead)
     get "/campaigns/#{campaign.id}/entities/npc-bran"
-    expect(response.body).to include('Elena')
-    expect(response.body).to include('granddaughter')
-    expect(response.body).not_to include('weathered bartender')
+    assert_select "body", /Elena/
+    assert_select "body", /granddaughter/
+    assert_select "body", text: /weathered bartender/, count: 0
   end
 end
 ```
 
 **Step 2: Run test to verify it passes**
 
-Run: `bundle exec rspec spec/integration/overlay_system_spec.rb`
+Run: `bin/rails test test/integration/overlay_system_test.rb`
 Expected: All tests PASS
 
 **Step 3: Commit**
 
 ```bash
-git add spec/integration/
+git add test/integration/
 git commit -m "test: add end-to-end integration test for overlay system"
 ```
 
@@ -2487,7 +2472,7 @@ Run: `bin/rails playkit:import`
 ## Testing
 
 ```bash
-bundle exec rspec
+bin/rails test
 ```
 
 ## File Format
