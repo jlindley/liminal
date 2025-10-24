@@ -83,4 +83,29 @@ class EntityResolverTest < ActiveSupport::TestCase
     result = EntityResolver.resolve(entity_id: "npc-missing", campaign: campaign)
     assert_nil result
   end
+
+  test "logs resolution steps at debug level" do
+    campaign = Campaign.create!(name: "Test", active_overlays: ["recently-bubbled", "elemental-maelstorm"])
+
+    # Capture log output
+    log_output = StringIO.new
+    original_logger = Rails.logger
+    Rails.logger = Logger.new(log_output)
+    Rails.logger.level = Logger::DEBUG
+
+    EntityResolver.resolve(entity_id: "npc-bran", campaign: campaign)
+
+    Rails.logger = original_logger
+    logs = log_output.string
+
+    # Verify key log messages are present
+    assert_match /Starting resolution for entity_id=npc-bran/, logs
+    assert_match /Active overlays/, logs
+    assert_match /Found entity/, logs
+    assert_match /Starting with core_data/, logs
+    assert_match /Fragment.*matched/, logs
+    assert_match /Resolution complete/, logs
+  ensure
+    Rails.logger = original_logger if original_logger
+  end
 end
