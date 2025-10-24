@@ -1,0 +1,25 @@
+# playkits/bubble/overlays/overlays.toml
+
+[[overlay]]
+overlay_id = "recently-bubbled"
+name = "Recently Bubbled"
+overlay_type = "major"
+mutually_exclusive_with = ["100-years-bubbled"]
+
+[[overlay]]
+overlay_id = "100-years-bubbled"
+name = "100 Years Bubbled"
+overlay_type = "major"
+mutually_exclusive_with = ["recently-bubbled"]
+
+[[overlay]]
+overlay_id = "elemental-maelstorm"
+name = "Elemental Maelstorm"
+overlay_type = "flavor"
+mutually_exclusive_with = []
+
+[[overlay]]
+overlay_id = "political-lockdown"
+name = "Political Lockdown"
+overlay_type = "flavor"
+mutually_exclusive_with = []
