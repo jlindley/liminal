@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_10_24_054955) do
+ActiveRecord::Schema[8.0].define(version: 2025_10_24_055628) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -27,6 +27,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_24_054955) do
     t.jsonb "show_when", default: []
     t.index ["entity_id"], name: "index_base_entities_on_entity_id", unique: true
     t.index ["entity_type"], name: "index_base_entities_on_entity_type"
+    t.index ["replaces"], name: "index_base_entities_on_replaces", unique: true, where: "(replaces IS NOT NULL)"
   end
 
   create_table "campaigns", force: :cascade do |t|
