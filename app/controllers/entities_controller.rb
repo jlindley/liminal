@@ -1,7 +1,15 @@
 class EntitiesController < ApplicationController
   def show
-    @entity = BaseEntity.find_by!(entity_id: params[:entity_id])
+    @campaign = Campaign.find(params[:campaign_id])
+    @resolved_data = EntityResolver.resolve(
+      entity_id: params[:entity_id],
+      campaign: @campaign
+    )
+
+    if @resolved_data.nil?
+      render plain: "Entity not found", status: :not_found
+    end
   rescue ActiveRecord::RecordNotFound
-    render plain: "Entity not found", status: :not_found
+    render plain: "Campaign not found", status: :not_found
   end
 end

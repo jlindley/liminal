@@ -1,28 +1,45 @@
 require "test_helper"
 
 class EntitiesControllerTest < ActionDispatch::IntegrationTest
-  test "displays entity core data" do
-    entity = BaseEntity.create!(
+  def setup
+    @bran = BaseEntity.create!(
       entity_id: "npc-bran",
       entity_type: "npc",
       name: "Bran",
       core_data: {
+        "name" => "Bran",
         "role" => "Bartender",
-        "race" => "Human",
-        "description" => "A weathered bartender with kind eyes"
-      }
+        "description" => "A weathered bartender"
+      },
+      conditional_fragments: [
+        {
+          "required_overlays" => ["recently-bubbled"],
+          "data" => { "personality" => "Skeptical of outsiders" }
+        }
+      ]
     )
 
-    get "/entities/npc-bran"
+    # Create the overlay that the campaign will reference
+    Overlay.create!(
+      overlay_id: "recently-bubbled",
+      name: "Recently Bubbled",
+      overlay_type: "major",
+      mutually_exclusive_with: []
+    )
+  end
+
+  test "displays resolved entity data based on campaign overlays" do
+    campaign = Campaign.create!(name: "Test Campaign", active_overlays: ["recently-bubbled"])
+    get "/campaigns/#{campaign.id}/entities/npc-bran"
 
     assert_response :success
     assert_select "body", /Bran/
-    assert_select "body", /Bartender/
-    assert_select "body", /A weathered bartender with kind eyes/
+    assert_select "body", /Skeptical of outsiders/
   end
 
   test "returns 404 for missing entity" do
-    get "/entities/npc-missing"
+    campaign = Campaign.create!(name: "Test Campaign", active_overlays: [])
+    get "/campaigns/#{campaign.id}/entities/npc-missing"
     assert_response :not_found
   end
 end

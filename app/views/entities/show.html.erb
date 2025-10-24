@@ -1,14 +1,22 @@
 <div class="max-w-4xl mx-auto p-6">
-  <h1 class="text-3xl font-bold mb-4"><%= @entity.name %></h1>
+  <div class="mb-4">
+    <a href="<%= campaign_path(@campaign) %>" class="text-blue-600 hover:underline">&larr; Back to <%= @campaign.name %></a>
+  </div>
+
+  <h1 class="text-3xl font-bold mb-4"><%= @resolved_data["name"] %></h1>
 
   <div class="bg-white shadow rounded-lg p-6">
     <dl class="space-y-2">
-      <% @entity.core_data.each do |key, value| %>
+      <% @resolved_data.each do |key, value| %>
         <div>
           <dt class="font-semibold text-gray-700"><%= key.titleize %>:</dt>
-          <dd class="text-gray-900"><%= value %></dd>
+          <dd class="text-gray-900"><%= value.is_a?(Array) ? value.join(", ") : value %></dd>
         </div>
       <% end %>
     </dl>
+  </div>
+
+  <div class="mt-6 text-sm text-gray-500">
+    <p>Active overlays: <%= @campaign.active_overlays.join(", ").presence || "None" %></p>
   </div>
 </div>
