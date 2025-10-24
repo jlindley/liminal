@@ -2,10 +2,8 @@
 
 one:
   name: MyString
-  play_kit_id: MyString
-  active_overlays: 
+  active_overlays: []
 
 two:
   name: MyString
-  play_kit_id: MyString
-  active_overlays: 
+  active_overlays: [] 

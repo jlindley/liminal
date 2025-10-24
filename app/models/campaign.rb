@@ -1,23 +1,26 @@
 class Campaign < ApplicationRecord
   has_many :dm_overrides
 
-  validate :check_mutual_exclusivity
+  validates :name, presence: true
+  validate :validate_mutually_exclusive_overlays
 
-  def check_mutual_exclusivity
+  private
+
+  def validate_mutually_exclusive_overlays
     return if active_overlays.blank?
 
     active_overlays.each do |overlay_id|
       overlay = Overlay.find_by(overlay_id: overlay_id)
       next unless overlay
 
-      conflicts = overlay.mutually_exclusive_with || []
-      conflicts.each do |conflict_id|
-        if active_overlays.include?(conflict_id)
-          errors.add(:active_overlays, "#{overlay_id} and #{conflict_id} are mutually exclusive")
-        end
+      conflicts = overlay.mutually_exclusive_with & active_overlays
+      if conflicts.any?
+        errors.add(:active_overlays, "#{overlay_id} is mutually exclusive with #{conflicts.join(', ')}")
       end
     end
   end
+
+  public
 
   # Resolve an entity for this campaign given active overlays and DM customizations
   def resolve_entity(entity_id, viewer_role: :dm)
