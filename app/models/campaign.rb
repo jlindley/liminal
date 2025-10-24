@@ -3,20 +3,47 @@ class Campaign < ApplicationRecord
 
   validates :name, presence: true
   validate :validate_mutually_exclusive_overlays
+  validate :validate_no_duplicate_overlays
 
   private
 
   def validate_mutually_exclusive_overlays
     return if active_overlays.blank?
 
+    unless active_overlays.is_a?(Array)
+      errors.add(:active_overlays, "must be an array")
+      return
+    end
+
+    Rails.logger.debug "Campaign validation: checking #{active_overlays.length} overlays for conflicts"
+
     active_overlays.each do |overlay_id|
       overlay = Overlay.find_by(overlay_id: overlay_id)
-      next unless overlay
+
+      unless overlay
+        Rails.logger.warn "Campaign validation: overlay '#{overlay_id}' not found in database"
+        errors.add(:active_overlays, "contains invalid overlay ID: #{overlay_id}")
+        next
+      end
 
       conflicts = overlay.mutually_exclusive_with & active_overlays
       if conflicts.any?
+        Rails.logger.debug "Campaign validation: overlay '#{overlay_id}' conflicts with #{conflicts.inspect}"
         errors.add(:active_overlays, "#{overlay_id} is mutually exclusive with #{conflicts.join(', ')}")
       end
+    end
+
+    Rails.logger.debug "Campaign validation: #{errors.empty? ? 'passed' : "failed with #{errors.count} errors"}"
+  end
+
+  def validate_no_duplicate_overlays
+    return if active_overlays.blank?
+    return unless active_overlays.is_a?(Array)
+
+    duplicates = active_overlays.group_by(&:itself).select { |_, v| v.size > 1 }.keys
+    if duplicates.any?
+      Rails.logger.debug "Campaign validation: found duplicate overlay IDs: #{duplicates.inspect}"
+      errors.add(:active_overlays, "contains duplicate overlay IDs: #{duplicates.join(', ')}")
     end
   end
 

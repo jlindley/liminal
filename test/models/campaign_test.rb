@@ -36,4 +36,37 @@ class CampaignTest < ActiveSupport::TestCase
     campaign = Campaign.new(name: "Test Campaign", active_overlays: [])
     assert campaign.valid?
   end
+
+  test "allows nil active_overlays" do
+    campaign = Campaign.new(name: "Test Campaign", active_overlays: nil)
+    assert campaign.valid?
+  end
+
+  test "rejects non-existent overlay IDs" do
+    campaign = Campaign.new(
+      name: "Test Campaign",
+      active_overlays: ["recently-bubbled", "non-existent-overlay"]
+    )
+    assert_not campaign.valid?
+    assert_includes campaign.errors[:active_overlays].join, "non-existent-overlay"
+  end
+
+  test "rejects duplicate overlay IDs" do
+    campaign = Campaign.new(
+      name: "Test Campaign",
+      active_overlays: ["recently-bubbled", "recently-bubbled", "elemental-maelstorm"]
+    )
+    assert_not campaign.valid?
+    assert_match /duplicate/, campaign.errors[:active_overlays].first
+    assert_includes campaign.errors[:active_overlays].first, "recently-bubbled"
+  end
+
+  test "rejects invalid data type for active_overlays" do
+    campaign = Campaign.new(
+      name: "Test Campaign",
+      active_overlays: "not-an-array"
+    )
+    assert_not campaign.valid?
+    assert_includes campaign.errors[:active_overlays].join, "must be an array"
+  end
 end
