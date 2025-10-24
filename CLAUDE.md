@@ -34,4 +34,17 @@ Rails 8, PostgreSQL, Hotwire/Turbo, Tailwind, Kamal to VPS.
 - When data transforms, log before and after states
 - Think: "If this breaks at 2am, will the logs tell me why?"
 
+**Data Integrity Principles:**
+- **Guardrails over Resolution**: Prevent bad data at entry (validations, constraints), don't try to fix it during resolution
+- **Fail Fast**: Invalid data should be rejected immediately with clear error messages
+- **Defense in Depth**:
+  - Application-level validations for quick feedback during development
+  - Database-level constraints for enforcement even if validations bypassed
+  - Test both layers independently
+- **Referential Integrity**:
+  - Validate foreign references at application level (e.g., `replaces` field must reference existing entity_id)
+  - Document why database FK constraints aren't used when applicable (e.g., string-based references to entity_id)
+  - Use uniqueness constraints for one-to-one relationships (e.g., one entity can only replace one other)
+- **Edge Case Handling**: Empty arrays, nil values, duplicates, invalid types - handle them explicitly, don't rely on implicit behavior
+
 See DESIGN.md for full details.
