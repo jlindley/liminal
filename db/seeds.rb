@@ -10,20 +10,19 @@
 
 puts "Creating base entities..."
 
-BaseEntity.create!(
-  entity_id: "npc-bran",
-  entity_type: "npc",
-  name: "Bran",
-  core_data: {
+BaseEntity.find_or_create_by!(entity_id: "npc-bran") do |entity|
+  entity.entity_type = "npc"
+  entity.name = "Bran"
+  entity.core_data = {
     role: "Bartender",
     race: "Human",
     description: "A weathered bartender with kind eyes"
-  },
-  visibility_rules: {
+  }
+  entity.visibility_rules = {
     name: "public_when_discovered",
     description: "public_when_discovered",
     role: "public_when_discovered"
   }
-)
+end
 
 puts "Created #{BaseEntity.count} entities"
