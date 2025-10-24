@@ -1,0 +1,22 @@
+# playkits/bubble/entities/npcs/npc-elena.toml
+entity_id = "npc-elena"
+entity_type = "npc"
+name = "Elena"
+replaces = "npc-bran"
+show_when = ["100-years-bubbled"]
+
+[core_data]
+name = "Elena"
+race = "Human"
+role = "Bartender"
+description = "Bran's granddaughter, young and energetic"
+
+[core_data.stats]
+ac = 12
+hp = 10
+
+[visibility_rules]
+name = "public_when_discovered"
+description = "public_when_discovered"
+role = "public_when_discovered"
+stats = "dm_only"

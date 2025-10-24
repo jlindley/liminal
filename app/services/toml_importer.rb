@@ -24,6 +24,8 @@ class TomlImporter
       entity.core_data = data["core_data"] || {}
       entity.conditional_fragments = data["conditional_fragments"] || []
       entity.visibility_rules = data["visibility_rules"] || {}
+      entity.replaces = data["replaces"]
+      entity.show_when = data["show_when"] || []
       entity.save!
       Rails.logger.debug "TomlImporter: Successfully imported entity_id=#{entity_id}"
     end
