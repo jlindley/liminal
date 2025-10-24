@@ -7,3 +7,23 @@
 #   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
+
+puts "Creating base entities..."
+
+BaseEntity.create!(
+  entity_id: "npc-bran",
+  entity_type: "npc",
+  name: "Bran",
+  core_data: {
+    role: "Bartender",
+    race: "Human",
+    description: "A weathered bartender with kind eyes"
+  },
+  visibility_rules: {
+    name: "public_when_discovered",
+    description: "public_when_discovered",
+    role: "public_when_discovered"
+  }
+)
+
+puts "Created #{BaseEntity.count} entities"
