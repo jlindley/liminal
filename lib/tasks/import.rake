@@ -14,11 +14,31 @@ namespace :playkit do
     imported_count = 0
     error_count = 0
 
-    toml_files = Dir.glob(playkit_dir.join("**/*.toml")).reject { |f| File.basename(f) == "overlays.toml" }
-    Rails.logger.debug "ImportRake: Found #{toml_files.count} TOML files"
-
     puts "Importing TOML files from #{playkit_dir}..."
     puts "=" * 60
+
+    # Import overlays first
+    overlays_file = playkit_dir.join("bubble/overlays/overlays.toml")
+    if overlays_file.exist?
+      puts "\nImporting overlays from #{overlays_file}..."
+      begin
+        TomlImporter.import_overlays(overlays_file)
+        overlay_count = Overlay.count
+        puts "  ✓ Success - #{overlay_count} overlays imported"
+        Rails.logger.debug "ImportRake: Successfully imported #{overlay_count} overlays"
+      rescue => e
+        puts "  ✗ Error: #{e.message}"
+        Rails.logger.error "ImportRake: Failed to import overlays: #{e.message}"
+        error_count += 1
+      end
+    else
+      puts "\nNo overlays file found at #{overlays_file}"
+      Rails.logger.debug "ImportRake: No overlays file found"
+    end
+
+    # Import entities
+    toml_files = Dir.glob(playkit_dir.join("**/*.toml")).reject { |f| File.basename(f) == "overlays.toml" }
+    Rails.logger.debug "ImportRake: Found #{toml_files.count} entity TOML files"
 
     toml_files.each do |file_path|
       puts "\nImporting #{file_path}..."

@@ -45,4 +45,17 @@ class TomlImporterTest < ActiveSupport::TestCase
       TomlImporter.import_file(@fixture_path)
     end
   end
+
+  test "imports all overlays from overlays.toml" do
+    overlays_path = Rails.root.join("playkits/bubble/overlays/overlays.toml")
+
+    assert_difference "Overlay.count", 4 do
+      TomlImporter.import_overlays(overlays_path)
+    end
+
+    recently = Overlay.find_by(overlay_id: "recently-bubbled")
+    assert_equal "Recently Bubbled", recently.name
+    assert_equal "major", recently.overlay_type
+    assert_equal ["100-years-bubbled"], recently.mutually_exclusive_with
+  end
 end
